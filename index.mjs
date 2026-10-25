@@ -165,6 +165,72 @@ export const LoomyAuthPlugin = async ({ client, directory } = {}) => {
   }
 
   /**
+   * 给**本账号**挑一个可用的邀请码（供签到钩子调用）。
+   *
+   * 返回 `undefined` 表示不该兑换 —— 三种情况：
+   *   1. 本号已经兑换过别人的码（`activated: true`）—— 每号只能一次，别白发请求
+   *   2. 本机没有**别人**的码（只有自己）—— 不能自己邀请自己
+   *   3. 挑不出还有余量的码
+   *
+   * ⚠ **被邀请者仍可以继续邀请别人**：实测 181 号兑换了 189 的码之后，
+   *   它自己的 `FDW3CU` 仍是 `active` / `usedCount 0`。所以这里**不**因为
+   *   「本号 activated」就把本号从候选里剔除 —— 它自己那份照常可用。
+   *   反过来，**已邀请过我的那个码**要排除：不然 A 邀请 B、B 又邀请 A，
+   *   平台侧可能视作互刷。
+   */
+  const pickInviteFor = async (session) => {
+    // 已兑换过就到此为止（每账号一次）
+    let applied
+    try {
+      const st = await fetchActivation(session)
+      if (st.activated) return undefined
+      applied = st.appliedInvitationCode
+    } catch {
+      return undefined
+    }
+
+    // 本号自己的码（要从候选里排除）
+    let selfCode
+    try {
+      const mine = await fetchInviteCodes(session)
+      selfCode = mine[0]?.code
+    } catch {
+      selfCode = undefined
+    }
+
+    // ⚠⚠ **互相邀请**要去掉：如果本号的码已经被别人用过（`usedCount > 0`），
+    //   那用它的那个人反过来又能拿本号的码 —— 两个号互相邀请、各拿两笔
+    //   5000，就是刷。实测踩到过：189 与 181 互相兑换，各得 10000。
+    //
+    //   判据不靠猜：本机每张码的 `usedCount` 就是「被几个人用过」。
+    //   只要本号自己的码 `usedCount > 0`，说明有人邀请过本号这边的关系，
+    //   此时**已经兑换过就别再换**（上面 `activated` 已拦住），
+    //   而本号自己的码继续留给**新来的号**用 —— 单向，不成环。
+    //
+    //   更严格的一层：把「已经用掉本号码的那些账号的码」也排除。
+    //   但 `usedCount` 只给数量、不给是谁，所以能做到的就是：
+    //   **本号码一旦被用过，就再也不用别人的码**（互刷必然要求双方各用一次）。
+    let selfUsed = 0
+    try {
+      const mine = await fetchInviteCodes(session)
+      selfUsed = mine[0]?.usedCount ?? 0
+    } catch {
+      selfUsed = 0
+    }
+    if (selfUsed > 0) {
+      log(`本号的邀请码已被 ${selfUsed} 人使用，不再兑换别人的码（避免互刷）`)
+      return undefined
+    }
+
+    const candidates = await collectInviteCandidates(session)
+    const picked = _pure.pickInviteCode(candidates, selfCode)
+    if (!picked) return undefined
+    // 再排一层：**本号已经用过的那个码**不能重复用（服务端也会拒，但别白发请求）
+    if (applied && picked.code === applied) return undefined
+    return picked.code
+  }
+
+  /**
    * 新账号登录后的收尾：把「已有账号的邀请码」带上去 + 记住当日上限。
    *
    * ⚠ 邀请码必须走 `first-login`（首次初始化）或 `points/activation`，
@@ -174,40 +240,17 @@ export const LoomyAuthPlugin = async ({ client, directory } = {}) => {
    * 邀请码从**其它已登录账号**里挑（`getAuth` 拿不到全局，所以由调用方传 candidates）。
    * 一个都找不到就静默跳过 —— 这是加分项，不该让登录失败。
    */
-  const settleNewAccount = async (session, auth, { inviteCandidates, selfCode } = {}) => {
-    const patch = {}
-    let claim
-
-    // 挑一个可用的邀请码（排除自己的、用完的、非 active 的）
-    const picked = _pure.pickInviteCode(inviteCandidates ?? [], selfCode)
-    if (picked) {
-      try {
-        const state = await fetchActivation(session)
-        if (state.activated) {
-          log(`该账号已用过邀请码，跳过（不重复兑换）`)
-        } else {
-          // 两条路都能绑：带上 inviteCode 调 first-login（首次初始化），
-          // 或显式 POST points/activation。先用前者 —— 它顺便把当日额度也初始化了。
-          claim = await claimDailyQuota(session, { inviteCode: picked.code })
-          if (claim.ok) {
-            log(`已绑定邀请码 ${picked.code}（来自已有账号），双方各得 ${_pure.INVITE_REWARD_POINTS} 积分`)
-          } else {
-            // first-login 那条没成，退回显式绑定
-            const bound = await bindInviteCode(session, picked.code)
-            if (bound.ok) log(`已绑定邀请码 ${picked.code}（activation）`)
-            else log(`邀请码绑定失败（不影响登录）：${bound.message}`, "warn")
-            claim = claim ?? (await claimDailyQuota(session))
-          }
-        }
-      } catch (e) {
-        log(`邀请码流程跳过：${e?.message ?? e}`, "warn")
-      }
-    }
-    claim = claim ?? (await claimDailyQuota(session))
-
-    const qp = quotaPatch(claim)
-    if (Object.keys(qp).length) Object.assign(patch, qp)
-    return patch
+  /**
+   * 登录后的收尾：**只初始化当天额度**，顺手记进凭据。
+   *
+   * ⚠ 邀请码**不在这里兑换**。它是「账号存在期间随时可做一次」的事，
+   *   不是「注册那一刻必须做」的事 —— 放进每天一次的签到钩子，既覆盖新号
+   *   第一次签到，也覆盖「老号后来才想用」，注册流程里不用塞输入框。
+   *   见下面 `auth.checkin` 的第 ③ 步。
+   */
+  const settleNewAccount = async (session) => {
+    const claim = await claimDailyQuota(session)
+    return quotaPatch(claim)
   }
 
   const remember = async (provider, auth, patch) => {
@@ -283,8 +326,7 @@ export const LoomyAuthPlugin = async ({ client, directory } = {}) => {
                   (desktop.phone ? _pure.maskPhone(String(desktop.phone)) : `Loomy ${session.slice(-6)}`)
                 // 登录后立刻初始化当天额度（官方客户端同款行为）并把上限记进凭据；
                 // 顺便带上已有账号的邀请码（每个账号只能兑换一次，失败不影响登录）
-                const inviteCandidates = await collectInviteCandidates(session)
-                const claim = await settleNewAccount(session, null, { inviteCandidates })
+                const patch = await settleNewAccount(session)
                 return {
                   type: "success",
                   access: session,
@@ -293,7 +335,7 @@ export const LoomyAuthPlugin = async ({ client, directory } = {}) => {
                   accountId: label,
                   ...(desktop.userid ? { uid: String(desktop.userid) } : {}),
                   ...(desktop.phone ? { phone: String(desktop.phone) } : {}),
-                  ...quotaPatch(claim),
+                  ...patch,
                 }
               },
             }
@@ -322,8 +364,7 @@ export const LoomyAuthPlugin = async ({ client, directory } = {}) => {
               instructions: `验证码已发送至 ${_pure.maskPhone(phone)}，输入 6 位数字完成登录。`,
               callback: async (code) => {
                 const { session, userid } = await loginBySmsCode(phone, code, msgid)
-                const inviteCandidates = await collectInviteCandidates(session)
-                const claim = await settleNewAccount(session, null, { inviteCandidates })
+                const patch = await settleNewAccount(session)
                 return {
                   type: "success",
                   access: session,
@@ -332,7 +373,7 @@ export const LoomyAuthPlugin = async ({ client, directory } = {}) => {
                   accountId: _pure.maskPhone(phone),
                   uid: userid,
                   phone,
-                  ...quotaPatch(claim),
+                  ...patch,
                 }
               },
             }
@@ -365,15 +406,14 @@ export const LoomyAuthPlugin = async ({ client, directory } = {}) => {
               return { type: "failed", error: "session 无效或已过期（拉取模型目录失败）" }
             }
             const note = String(inputs?.note ?? "").trim()
-            const inviteCandidates = await collectInviteCandidates(session)
-            const claim = await settleNewAccount(session, null, { inviteCandidates })
+            const patch = await settleNewAccount(session)
             return {
               type: "success",
               access: session,
               refresh: "",
               expires: Date.now() + SESSION_TTL_MS,
               accountId: note || `Loomy ${session.slice(-6)}`,
-              ...quotaPatch(claim),
+              ...patch,
             }
           },
         },
@@ -452,14 +492,27 @@ export const LoomyAuthPlugin = async ({ client, directory } = {}) => {
        *   （返回 `"success"`，magpie 归 `failed` 却保留 message，
        *    界面于是显示「签到失败 · 每日赠送积分已刷新」）。
        */
+      /**
+       * 签到钩子 = **每天把能领的都领一遍**。
+       *
+       * magpie 按北京时间每账号每天调一次，所以这里是「顺手做」的最佳位置：
+       *
+       *   ① 刷新每日额度（`first-login`，幂等）
+       *   ② 领新手任务（`onboarding/tasks/complete`，幂等）
+       *   ③ 兑换邀请码（`points/activation`，**每账号一次**）
+       *
+       * 三件事全部幂等，重复调用无害 —— 这是把它们放在每天签到里的前提。
+       * ⚠ ②③ 失败都**不影响签到结果**：它们是一天里顺带做的事，
+       *   不是签到的前置条件。
+       */
       async checkin(getAuth, provider) {
         const auth = await getAuth()
         const credential = _pure.credentialOf(auth)
         if (!credential) return { outcome: "failed", message: "未登录" }
 
+        // ① 每日额度
         const claim = await claimDailyQuota(credential.session)
         const result = _pure.checkinOutcome(claim)
-
         if (claim.ok) {
           // 签到是拿到 `dailyQuota` 的**权威时刻**：记进凭据并清缓存，
           // 让卡片立刻反映新的上限（而不是等 60 秒 TTL）
@@ -467,24 +520,47 @@ export const LoomyAuthPlugin = async ({ client, directory } = {}) => {
           clearUsageCache()
         }
 
-        // 新手任务跟着签到一起领：它们本就是「登录后的一次性引导奖励」，
-        // 放在每天一次的签到里做，既不会漏也不会重复（领取是幂等的）。
-        // ⚠ 失败不影响签到结果 —— 这是**加分项**，不是签到的前置条件。
-        if (claim.ok) {
-          try {
-            const state = await fetchOnboarding(credential.session)
-            const { claimed, failed } = await claimAllTasks(credential.session, state.tasks)
-            onboardingCache.set(credential.session, { at: Date.now(), value: null })
-            if (claimed.length > 0) {
-              const gained = claimed.reduce((n, x) => n + x.points, 0)
-              log(`新手任务领到 ${claimed.length} 项（+${gained} 分）${failed.length ? `，${failed.length} 项失败` : ""}`)
-              result.message += ` · 新手任务 +${gained} 分`
-              clearUsageCache()
-            }
-          } catch (e) {
-            log(`新手任务领取跳过：${e?.message ?? e}`, "warn")
+        const extras = []
+
+        // ② 新手任务
+        try {
+          const state = await fetchOnboarding(credential.session)
+          const { claimed, failed } = await claimAllTasks(credential.session, state.tasks)
+          onboardingCache.set(credential.session, { at: Date.now(), value: null })
+          if (claimed.length > 0) {
+            const gained = claimed.reduce((n, x) => n + x.points, 0)
+            log(`新手任务领到 ${claimed.length} 项（+${gained} 分）${failed.length ? `，${failed.length} 项失败` : ""}`)
+            extras.push(`新手任务 +${gained} 分`)
+            clearUsageCache()
           }
+        } catch (e) {
+          log(`新手任务领取跳过：${e?.message ?? e}`, "warn")
         }
+
+        // ③ 邀请码 —— **签到时才兑换，不在登录时**
+        //
+        // 为什么改到这里：邀请码的有效期是「帐号存在期间」，不是「注册那一刻」。
+        // 放在签到里，既覆盖了「新号第一次签到」，也覆盖了「老号后来才决定用」，
+        // 不用在注册流程里塞一个输入框。
+        try {
+          const picked = await pickInviteFor(credential.session)
+          if (picked) {
+            const r = await bindInviteCode(credential.session, picked)
+            if (r.ok && !r.alreadyActivated) {
+              log(`已兑换邀请码 ${picked}（邀请人 +${_pure.INVITE_REWARD_POINTS}，本号 +${_pure.INVITE_REWARD_POINTS}）`)
+              extras.push(`邀请码 +${_pure.INVITE_REWARD_POINTS} 分`)
+              clearUsageCache()
+            } else if (r.ok && r.alreadyActivated) {
+              log(`本号已兑换过邀请码（${picked}），跳过`)
+            } else {
+              log(`邀请码兑换失败（不影响签到）：${r.message}`, "warn")
+            }
+          }
+        } catch (e) {
+          log(`邀请码兑换跳过：${e?.message ?? e}`, "warn")
+        }
+
+        if (extras.length) result.message += ` · ${extras.join(" · ")}`
         return result
       },
     },
@@ -560,4 +636,6 @@ export const _internal = {
   bindInviteCode,
   fetchActivation,
   readAllLoomyAccounts,
+  pickInviteFor: (session) => pickInviteFor(session),
+  collectInviteCandidates: (s) => collectInviteCandidates(s),
 }

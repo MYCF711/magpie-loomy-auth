@@ -68,8 +68,8 @@ import {
   SESSION_TTL_MS,
   INTEGRATION_BASE,
 } from "./src/constants.mjs"
-import { claimDailyQuota, loginBySmsCode, fetchBalances, sendSmsCode, fetchOnboarding, claimAllTasks } from "./src/api.mjs"
-import { readDesktopSession } from "./src/desktop.mjs"
+import { claimDailyQuota, loginBySmsCode, fetchBalances, sendSmsCode, fetchOnboarding, claimAllTasks, fetchInviteCodes, bindInviteCode, fetchActivation } from "./src/api.mjs"
+import { readDesktopSession, readAllLoomySessions, readAllLoomyAccounts } from "./src/desktop.mjs"
 import { staticModels, liveModels } from "./src/models.mjs"
 import { readUsage, publicUsage, quotaToRemember, clearUsageCache } from "./src/usage.mjs"
 import { chatFetch } from "./src/chat.mjs"
@@ -130,6 +130,86 @@ export const LoomyAuthPlugin = async ({ client, directory } = {}) => {
    *   所以必须带回原记录的其它字段；而 `keyFor(id)` 在账号作用域里
    *   会把 id 解析成**当前账号**的键，因此这里写的就是当前账号。
    */
+  /**
+   * 收集**本机其它已登录 Loomy 账号**的邀请码，供新账号首次登录时使用。
+   *
+   * 为什么需要读文件：`getAuth()` 只在**当前账号作用域**里可见（magpie 的
+   * `inScope`），拿不到别的账号。而邀请码存在别的账号名下 —— 只能从
+   * `plugin-auth.json` 里把 loomy / loomy#xxxx 这些条目全捞出来，逐个查。
+   *
+   * ⚠ 全失败就当没有（登录不能因为「找不到邀请码」而失败）。
+   * ⚠ 结果按分钟缓存：登录是低频操作，但三个 provider id 会各扫一遍，
+   *   没必要每次都打 N 个只读请求。
+   */
+  const inviteCodeCache = new Map() // session -> { at, codes }
+  const INVITE_CACHE_TTL_MS = 60_000
+
+  const collectInviteCandidates = async (excludeSession) => {
+    const sessions = readAllLoomySessions(excludeSession)
+    const out = []
+    for (const session of sessions) {
+      const hit = inviteCodeCache.get(session)
+      if (hit && Date.now() - hit.at < INVITE_CACHE_TTL_MS) {
+        out.push(...hit.codes)
+        continue
+      }
+      try {
+        const codes = await fetchInviteCodes(session)
+        inviteCodeCache.set(session, { at: Date.now(), codes })
+        out.push(...codes)
+      } catch {
+        // 这个号查不到就跳过，不影响其它号
+      }
+    }
+    return out
+  }
+
+  /**
+   * 新账号登录后的收尾：把「已有账号的邀请码」带上去 + 记住当日上限。
+   *
+   * ⚠ 邀请码必须走 `first-login`（首次初始化）或 `points/activation`，
+   *   而**每个账号只能兑换一次** —— 客户端文案：「您可以使用邀请码兑换一次积分」。
+   *   所以这里先查一次 `activation`：已经用过的就不再动，避免白白发一次写请求。
+   *
+   * 邀请码从**其它已登录账号**里挑（`getAuth` 拿不到全局，所以由调用方传 candidates）。
+   * 一个都找不到就静默跳过 —— 这是加分项，不该让登录失败。
+   */
+  const settleNewAccount = async (session, auth, { inviteCandidates, selfCode } = {}) => {
+    const patch = {}
+    let claim
+
+    // 挑一个可用的邀请码（排除自己的、用完的、非 active 的）
+    const picked = _pure.pickInviteCode(inviteCandidates ?? [], selfCode)
+    if (picked) {
+      try {
+        const state = await fetchActivation(session)
+        if (state.activated) {
+          log(`该账号已用过邀请码，跳过（不重复兑换）`)
+        } else {
+          // 两条路都能绑：带上 inviteCode 调 first-login（首次初始化），
+          // 或显式 POST points/activation。先用前者 —— 它顺便把当日额度也初始化了。
+          claim = await claimDailyQuota(session, { inviteCode: picked.code })
+          if (claim.ok) {
+            log(`已绑定邀请码 ${picked.code}（来自已有账号），双方各得 ${_pure.INVITE_REWARD_POINTS} 积分`)
+          } else {
+            // first-login 那条没成，退回显式绑定
+            const bound = await bindInviteCode(session, picked.code)
+            if (bound.ok) log(`已绑定邀请码 ${picked.code}（activation）`)
+            else log(`邀请码绑定失败（不影响登录）：${bound.message}`, "warn")
+            claim = claim ?? (await claimDailyQuota(session))
+          }
+        }
+      } catch (e) {
+        log(`邀请码流程跳过：${e?.message ?? e}`, "warn")
+      }
+    }
+    claim = claim ?? (await claimDailyQuota(session))
+
+    const qp = quotaPatch(claim)
+    if (Object.keys(qp).length) Object.assign(patch, qp)
+    return patch
+  }
+
   const remember = async (provider, auth, patch) => {
     if (!patch) return
     const body = { ...(auth ?? {}), ...patch }
@@ -201,8 +281,10 @@ export const LoomyAuthPlugin = async ({ client, directory } = {}) => {
                 const label =
                   desktop.maskedPhone ||
                   (desktop.phone ? _pure.maskPhone(String(desktop.phone)) : `Loomy ${session.slice(-6)}`)
-                // 登录后立刻初始化当天额度（官方客户端同款行为）并把上限记进凭据
-                const claim = await claimDailyQuota(session)
+                // 登录后立刻初始化当天额度（官方客户端同款行为）并把上限记进凭据；
+                // 顺便带上已有账号的邀请码（每个账号只能兑换一次，失败不影响登录）
+                const inviteCandidates = await collectInviteCandidates(session)
+                const claim = await settleNewAccount(session, null, { inviteCandidates })
                 return {
                   type: "success",
                   access: session,
@@ -240,7 +322,8 @@ export const LoomyAuthPlugin = async ({ client, directory } = {}) => {
               instructions: `验证码已发送至 ${_pure.maskPhone(phone)}，输入 6 位数字完成登录。`,
               callback: async (code) => {
                 const { session, userid } = await loginBySmsCode(phone, code, msgid)
-                const claim = await claimDailyQuota(session)
+                const inviteCandidates = await collectInviteCandidates(session)
+                const claim = await settleNewAccount(session, null, { inviteCandidates })
                 return {
                   type: "success",
                   access: session,
@@ -282,7 +365,8 @@ export const LoomyAuthPlugin = async ({ client, directory } = {}) => {
               return { type: "failed", error: "session 无效或已过期（拉取模型目录失败）" }
             }
             const note = String(inputs?.note ?? "").trim()
-            const claim = await claimDailyQuota(session)
+            const inviteCandidates = await collectInviteCandidates(session)
+            const claim = await settleNewAccount(session, null, { inviteCandidates })
             return {
               type: "success",
               access: session,
@@ -472,4 +556,8 @@ export const _internal = {
   fetchBalances,
   fetchOnboarding,
   claimAllTasks,
+  fetchInviteCodes,
+  bindInviteCode,
+  fetchActivation,
+  readAllLoomyAccounts,
 }

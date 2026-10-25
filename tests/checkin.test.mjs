@@ -221,3 +221,48 @@ test("任务全领完就不画这一格（不是画一个 0）", () => {
   const all = Object.fromEntries(Object.keys(pure.onboardingPoints()).map((k) => [k, true]))
   assert.equal(pure.onboardingWindow(pure.normalizeTasks(all), 10000), null)
 })
+
+// ── 邀请码（referral）────────────────────────────────────────────────
+
+test("邀请码规范化：大写、去空白、非法形态返回空", () => {
+  const { normalizeInviteCode } = pure
+  assert.equal(normalizeInviteCode(" e4dpt6 "), "E4DPT6")
+  assert.equal(normalizeInviteCode("FDW3CU"), "FDW3CU")
+  assert.equal(normalizeInviteCode(""), "")
+  assert.equal(normalizeInviteCode("a"), "", "太短")
+  assert.equal(normalizeInviteCode("has space"), "")
+  assert.equal(normalizeInviteCode("中文码"), "")
+})
+
+test("邀请奖励是 5000（客户端常量 nb = 5e3），别与新手任务 share_soul 的 2000 混", () => {
+  const { INVITE_REWARD_POINTS, onboardingPoints } = pure
+  assert.equal(INVITE_REWARD_POINTS, 5000)
+  assert.equal(onboardingPoints().share_soul, 2000, "这是另一笔，不是邀请奖励")
+})
+
+test("挑邀请码：排除自己的、用完的、非 active 的", () => {
+  const { pickInviteCode } = pure
+  const picked = pickInviteCode(
+    [
+      { code: "SELF01", usedCount: 0, maxUses: 100, status: "active" },
+      { code: "FULL02", usedCount: 100, maxUses: 100, status: "active" },   // 用完
+      { code: "DEAD03", usedCount: 0, maxUses: 100, status: "disabled" },   // 非 active
+      { code: "OKAY04", usedCount: 7, maxUses: 1000, status: "active" },
+      { code: "LESS05", usedCount: 2, maxUses: 1000, status: "active" },
+    ],
+    "SELF01",
+  )
+  assert.equal(picked.code, "LESS05", "应挑用得最少的可用码")
+})
+
+test("一个可用邀请码都没有时返回 undefined（不编一个）", () => {
+  const { pickInviteCode } = pure
+  assert.equal(pickInviteCode([{ code: "A", usedCount: 5, maxUses: 5, status: "active" }], ""), undefined)
+  assert.equal(pickInviteCode([], ""), undefined)
+})
+
+test("maxUses<=0 视为不限次", () => {
+  const { pickInviteCode } = pure
+  const picked = pickInviteCode([{ code: "NOLIMIT", usedCount: 999, maxUses: 0, status: "active" }], "")
+  assert.equal(picked.code, "NOLIMIT")
+})

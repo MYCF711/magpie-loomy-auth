@@ -43,6 +43,9 @@
 
 import { BEIJING_UTC_OFFSET_MS, PROVIDER } from "./constants.mjs"
 
+/** 邀请双方各得的积分（客户端常量 `nb = 5e3`）。 */
+const INVITE_REWARD_POINTS = 5000
+
 export const _pure = {
   windowsOf,
   balanceLine,
@@ -84,6 +87,10 @@ export const _pure = {
   earnedPoints,
   pendingTasks,
   onboardingWindow,
+
+  normalizeInviteCode,
+  pickInviteCode,
+  INVITE_REWARD_POINTS,
 }
 
 const round = (n) => Math.round(n * 100) / 100
@@ -765,4 +772,47 @@ function onboardingWindow(tasks, total) {
     display: `可领 ${left} 积分（${pending} 项待完成）`,
     unit: "积分",
   }
+}
+
+// ════════════════════════════════════════════════════════════════════
+// ⑩ 邀请码
+// ════════════════════════════════════════════════════════════════════
+//
+// 客户端文案原文（asar 里 `gde()`，常量 `nb = 5e3`）：
+//   「分享有礼 — 邀请好友双方各获取 5000 积分」
+// ⚠ 是 **5000**。别和新手任务里 `share_soul` 的 2000 搞混 —— 那是两笔不同的奖励。
+//
+// 每个账号**只能兑换一次**（客户端文案：「您可以使用邀请码兑换一次积分」），
+// 所以「新账号登录时捎上老账号的邀请码」这件事，天然只在首次有意义。
+
+/** 邀请码的形态校验：上游实测是 6 位大写字母数字（`E4DPT6` / `FDW3CU`）。 */
+function normalizeInviteCode(raw) {
+  const code = String(raw ?? "").trim().toUpperCase()
+  if (!code) return ""
+  if (!/^[A-Z0-9]{4,16}$/.test(code)) return ""
+  return code
+}
+
+/** 双方各得的积分（客户端常量 `nb = 5e3`）。 */
+/**
+ * 从已有账号的邀请码里挑一个给新账号用。
+ *
+ * 规则：
+ *   - 只用 `status === "active"` 且**还有余量**（`usedCount < maxUses`）的码
+ *   - `maxUses <= 0` 视为不限（上游没给上限）
+ *   - 优先**用得最少**的（把额度摊开，而不是把一个码用满）
+ *   - 排除新账号自己的码（不能自己邀请自己）
+ */
+function pickInviteCode(candidates, selfCode) {
+  const usable = (Array.isArray(candidates) ? candidates : []).filter(
+    (x) =>
+      x &&
+      typeof x.code === "string" &&
+      x.code &&
+      x.code !== selfCode &&
+      (x.status === "" || x.status === "active") &&
+      (x.maxUses <= 0 || x.usedCount < x.maxUses),
+  )
+  if (!usable.length) return undefined
+  return usable.sort((a, b) => a.usedCount - b.usedCount || a.code.localeCompare(b.code))[0]
 }

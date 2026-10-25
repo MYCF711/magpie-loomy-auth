@@ -188,9 +188,16 @@ export async function fetchDailyLedger(session, cycleDate, fetcher = fetch) {
  *   只有 magpie 的 checkin 钩子与登录成功后的那一次可以。
  * ⚠ 幂等判据是 `alreadyProcessed`，重复调用同样回 HTTP 200。
  */
-export async function claimDailyQuota(session, fetcher = fetch) {
+export async function claimDailyQuota(session, options = {}) {
+  const { fetcher = fetch, inviteCode, deviceId } = options
+  // ⚠ 首次登录初始化接受 `{inviteCode, deviceId}`：新账号在这一刻就能把邀请码
+  //   带上去（客户端 completeFirstLogin 同款）。老账号传了也无害 —— 服务端
+  //   只在首次初始化记录，重复调用不覆盖。
+  const body = {}
+  if (inviteCode) body.inviteCode = String(inviteCode).trim()
+  if (body.inviteCode && deviceId) body.deviceId = String(deviceId)
   try {
-    const data = await tokenRequest("POST", "/api/v1/points/first-login", session, {}, "每日签到", fetcher)
+    const data = await tokenRequest("POST", "/api/v1/points/first-login", session, body, "每日签到", fetcher)
     return {
       ok: true,
       alreadyProcessed: data?.alreadyProcessed === true,
@@ -363,4 +370,67 @@ export async function claimAllTasks(session, tasks, fetcher = fetch) {
     else failed.push({ ...item, message: r.message })
   }
   return { claimed, failed }
+}
+
+// ════════════════════════════════════════════════════════════════════
+// 邀请码（referral）
+// ════════════════════════════════════════════════════════════════════
+//
+// 实测（2026-10-26，两个真实账号）：
+//   GET  /api/v1/invitation-codes   → {list:[{inviteCode,usedCount,maxUses,status}]}
+//     189****8051 → E4DPT6（上限 1000，已用 0）
+//     181****0632 → FDW3CU（上限 1000，已用 0）
+//   GET  /api/v1/points/activation  → {activated:false}
+//   POST /api/v1/points/activation  → 绑定别人的邀请码（**每个账号只能一次**）
+//
+// 客户端自己的文案（asar 里 `gde()` 的常量 `nb = 5e3`）：
+//   「分享有礼 — 邀请好友双方各获取 5000 积分」
+//   ⚠ 是 **5000**，别和「新手任务里 share_soul 的 2000」搞混 —— 两个不同的奖励。
+//
+// 还有一个更省事的路子：`POST /api/v1/points/first-login` **本身接受
+// `{inviteCode, deviceId}`**（见客户端 `completeFirstLogin`）。也就是说新账号
+// 在**首次登录初始化**那一刻就能把邀请码带上去，不用事后再绑定一次。
+// 我们的 `claimDailyQuota` 调的正是这个端点，所以给它加一个可选参数即可。
+
+/** 查自己的邀请码（只读）。多个码时优先 `status === "active"`。 */
+export async function fetchInviteCodes(session, fetcher = fetch) {
+  const data = await tokenRequest("GET", "/api/v1/invitation-codes", session, undefined, "邀请码查询", fetcher)
+  const list = Array.isArray(data?.list) ? data.list : []
+  return list
+    .map((x) => ({
+      code: typeof x?.inviteCode === "string" ? x.inviteCode.trim() : "",
+      usedCount: readNum(x?.usedCount) ?? 0,
+      maxUses: readNum(x?.maxUses) ?? 0,
+      status: typeof x?.status === "string" ? x.status.trim() : "",
+    }))
+    .filter((x) => x.code)
+}
+
+/** 本账号是否已经用过邀请码（只读）。**用过就不能再用**（客户端文案：兑换一次）。 */
+export async function fetchActivation(session, fetcher = fetch) {
+  const data = await tokenRequest("GET", "/api/v1/points/activation", session, undefined, "邀请状态查询", fetcher)
+  return { activated: data?.activated === true }
+}
+
+/**
+ * 绑定别人的邀请码（**一次性写**）。
+ *
+ * 返回 `{ ok, activated, alreadyActivated, message }`，不抛错 ——
+ * 失败不该让调用方（登录流程）整个挂掉。
+ */
+export async function bindInviteCode(session, inviteCode, deviceId, fetcher = fetch) {
+  const code = String(inviteCode ?? "").trim()
+  if (!code) return { ok: false, message: "缺少邀请码" }
+  const body = { inviteCode: code }
+  if (deviceId) body.deviceId = String(deviceId)
+  try {
+    const data = await tokenRequest("POST", "/api/v1/points/activation", session, body, "邀请码绑定", fetcher)
+    return {
+      ok: true,
+      activated: data?.activated === true,
+      alreadyActivated: data?.alreadyActivated === true,
+    }
+  } catch (error) {
+    return { ok: false, message: String(error?.message ?? error).slice(0, 200) }
+  }
 }

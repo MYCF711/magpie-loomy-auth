@@ -102,3 +102,72 @@ export function jsonAfter(bytes, from) {
   }
   return null
 }
+
+// ════════════════════════════════════════════════════════════════════
+// 本机已有的 Loomy 账号（读 magpie 的凭据文件）
+// ════════════════════════════════════════════════════════════════════
+//
+// 为什么要读文件：`getAuth()` 只在**当前账号作用域**里可见（magpie 的 inScope），
+// 拿不到同一 provider 下的**其它**账号。而「用已有账号的邀请码邀请新账号」
+// 这件事，恰恰需要知道别的账号是什么 —— 只能直接读 `plugin-auth.json`。
+//
+// ⚠ 只读、只取 `access`（session），不打印、不外传。
+// ⚠ 只认 `loomy` 与 `loomy#xxxxxx` 两种键（magpie 的多账号命名）。
+// ⚠ 读不到就当没有：登录流程不能因为读凭据失败而失败。
+
+/** magpie 的凭据文件位置（与 `~/.config/magpie` 一致；DSH/MAGPIE 目录可用环境变量覆盖）。 */
+export function authFilePath() {
+  if (process.env.MAGPIE_AUTH_FILE) return process.env.MAGPIE_AUTH_FILE
+  const home = os.homedir()
+  const cfg = process.env.XDG_CONFIG_HOME || path.join(home, ".config")
+  return path.join(cfg, "magpie", "plugin-auth.json")
+}
+
+/**
+ * 本机所有 Loomy 账号的 session（**排除** excludeSession）。
+ *
+ * 顺序稳定（`loomy` 在前，其余按名排序），方便「优先用主账号的邀请码」。
+ */
+export function readAllLoomySessions(excludeSession) {
+  let raw
+  try {
+    raw = JSON.parse(readFileSync(authFilePath(), "utf8"))
+  } catch {
+    return []
+  }
+  if (!raw || typeof raw !== "object") return []
+
+  const keys = Object.keys(raw)
+    .filter((k) => k === "loomy" || k.startsWith("loomy#"))
+    .sort((a, b) => (a === "loomy" ? -1 : b === "loomy" ? 1 : a.localeCompare(b)))
+
+  const out = []
+  for (const key of keys) {
+    const rec = raw[key]
+    const session = typeof rec?.access === "string" ? rec.access.trim() : ""
+    if (!session) continue
+    if (excludeSession && session === excludeSession) continue
+    if (!out.includes(session)) out.push(session)
+  }
+  return out
+}
+
+/** 本机所有 Loomy 账号的 `{key, session, phone}`（供挑选邀请码时排除自己）。 */
+export function readAllLoomyAccounts() {
+  let raw
+  try {
+    raw = JSON.parse(readFileSync(authFilePath(), "utf8"))
+  } catch {
+    return []
+  }
+  if (!raw || typeof raw !== "object") return []
+  return Object.keys(raw)
+    .filter((k) => k === "loomy" || k.startsWith("loomy#"))
+    .sort((a, b) => (a === "loomy" ? -1 : b === "loomy" ? 1 : a.localeCompare(b)))
+    .map((key) => ({
+      key,
+      session: typeof raw[key]?.access === "string" ? raw[key].access.trim() : "",
+      phone: typeof raw[key]?.phone === "string" ? raw[key].phone : "",
+    }))
+    .filter((x) => x.session)
+}

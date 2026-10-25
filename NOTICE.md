@@ -19,7 +19,7 @@
   - `src/desktop.mjs`：Loomy 桌面端登录态的 leveldb 读取方式（键名
     `loomy-auth-session`、追加写所以从后往前找）。
 
-- **agent2api**（`loomy/sign.rs`, `loomy/images.rs`）
+- **agent2api**（`github.com/aimod-cc/agent2api`, 许可未核实；`loomy/sign.rs`, `loomy/images.rs`）
   - deepseek 系模型只认 `<image_base64>` 标记、不认 `image_url` data URI 的结论，
     以及把标记并入相邻 text 块的做法。
 
@@ -28,7 +28,7 @@
 本插件的额度上报口径与它们**不同**：市场现有实现不上报 `used`（或在拿不到上限时
 上报 0），导致 magpie 把被蹬空的账号排在路由队首。本插件上报真实占比、把永久池
 标为 `aside`、并在两池皆空时合成一条 `used: 100` 的参与路由窗口。
-详见 README 的「这个插件修的是什么」。
+判据与实测见 [`docs/internals.md`](docs/internals.md) 的「这个插件修的是什么」。
 
 ## 本项目自身
 

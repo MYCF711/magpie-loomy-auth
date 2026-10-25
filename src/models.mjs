@@ -29,7 +29,7 @@ import { _pure } from "./pure.mjs"
 import { PROVIDER_NAME, NPM, INTEGRATION_BASE } from "./constants.mjs"
 import { fetchModels } from "./api.mjs"
 
-const { splitRateSuffix, modelShape, parseModels } = _pure
+const { splitRateSuffix, isFreeModel, modelShape, parseModels } = _pure
 
 const API_URL = `${INTEGRATION_BASE}/api/v1`
 
@@ -48,6 +48,25 @@ const SNAPSHOT = [
 
 const EFFORTS = ["none", "low", "medium", "high", "xhigh"]
 
+/**
+ * 实测倍率（取自上游展示名尾部，2026-10-26）。
+ *
+ * ⚠ 这个表**只用于静态兜底**；活目录走 `parseModels`，倍率从上游直接解析。
+ * 两个「限时免费」的 Spark 是 `x0.0` —— 也就是不扣积分，必须能被
+ * `isFreeModel` 判成免费，否则它们会被当成收费模型、拿不到 Free first 的优先派发。
+ */
+const RATE_HINT = {
+  "spark-x2.6": "(x0.0)",
+  "spark-x": "(x0.0)",
+  "DeepSeek-V4.1-Flash": "(x2.0)",
+  "MiniMax-M3": "(x4.0)",
+  "Kimi-k2.6": "(x6.5)",
+  "qwen-3.8-max": "(x12.0)",
+  "GLM-5.3-Flash": "(x0.8)",
+  "qwen3.8-flash": "(x0.8)",
+  "mimo-v2.5": "(x3.3)",
+}
+
 /** 静态兜底表：未登录 / 目录拉取失败时用。**必须有内容**，否则卡片显示 "0 models"。 */
 export function staticModels() {
   const out = {}
@@ -64,7 +83,10 @@ export function staticModels() {
         video: false,
         efforts: EFFORTS,
         defaultEffort: "low",
-        rate: undefined,
+        // 上游把倍率写在展示名尾部，静态表里补回来 —— `free` 的判据要用它
+        // （`x0.0` = 不扣分 = 免费；`auto` 没有倍率，因此不是免费）
+        rate: splitRateSuffix(RATE_HINT[id] ?? "")[1],
+        free: isFreeModel(name, splitRateSuffix(RATE_HINT[id] ?? "")[1]),
       },
       { api: { url: API_URL, npm: NPM } },
     )

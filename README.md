@@ -102,6 +102,18 @@ magpie plugin list
 
 ---
 
+## 参考源
+
+本插件的协议实现参考了这几处，按各自许可在此声明（完整版权声明见 [`NOTICE.md`](NOTICE.md)）：
+
+| 来源 | 用在哪 |
+|---|---|
+| [yetone/magpie](https://github.com/yetone/magpie)（MIT） | 插件契约：`usage` 窗口字段、`used` 归一化、`aside` 语义、签到 outcome 清单、`free` 判据 |
+| [sucooer/magpie-plugins](https://github.com/sucooer/magpie-plugins)（MIT） | 账号接口的 HMAC-SHA1 签名构造、桌面端登录态（leveldb）读取方式 |
+| [agent2api](https://github.com/aimod-cc/agent2api) | deepseek 系模型只认 `<image_base64>` 标记、不认 `image_url` 的结论 |
+
+---
+
 ## 许可
 
 MIT。

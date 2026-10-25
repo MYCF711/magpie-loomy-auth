@@ -1,11 +1,51 @@
-# magpie-plugin-loomy-auth
+# Loomy for magpie
 
-> magpie 供应商插件 · 讯飞 Loomy
-> 仓库 `MYCF711/magpie-loomy-auth` · npm 包名 **`magpie-plugin-loomy-auth`**
+> 讯飞 Loomy 的编程订阅接进 magpie。**10 个模型、三种登录、积分按 magpie 的路由语义如实上报。**
+>
+> npm 包名 `magpie-plugin-loomy-auth` · 仓库 `MYCF711/magpie-loomy-auth`
 
-Loomy（讯飞）做成 magpie 供应商插件：**桌面端登录态导入 / 短信 / 粘贴 session**
-三种登录、实时模型目录与思考档位、工具调用与图片对话、每日额度刷新，
-以及**按 magpie 的真实路由语义分池上报的积分**。
+---
+
+## 装它有什么好处
+
+**1. 积分算得对。** 别人做的 Loomy 插件不报「已用百分比」，于是 magpie 一律当成 0% ——
+一个已经用光的号会显示「剩余 100%」，而且被排到路由队首。本机三天日志里，
+一个余额 0 的号被选中 256 次里占了 255 次，11 次请求被上游拒掉。
+这个插件报真实数字：**空号会沉底，余额 0 的就是 0**。
+
+**2. 多领两笔钱。**
+- **新手任务 10,000 分**：卡片上显示「可领 9500 积分（7 项待完成）」，签到后自动领。
+  别人做的插件没接这个，这笔钱就躺在那里。
+- **邀请码 5,000 分**：新添加账号时，自动用本机老账号的邀请码 —— **双方各得 5000**。
+
+**3. 登录态直接复用。** 如果你现在装着别的 Loomy 插件，装这个**不用重新登录**。
+
+---
+
+## 你需要什么
+
+- magpie（[usemagpie.ai](https://usemagpie.ai)）
+- 一个 Loomy 账号（讯飞，[loomy.xunfei.cn](https://loomy.xunfei.cn)）
+- 本机装了 Loomy 客户端的话，可以一键导入登录态，不用收短信
+
+---
+
+## 安装
+
+⚠ 先卸掉别的 Loomy 插件。两个插件抢同一个 `loomy` 供应商，会互相打架：
+
+```bash
+magpie plugin rm magpie-plugin-loomy      # 或你装的那个
+magpie plugin add magpie-plugin-loomy-auth
+```
+
+也可以从 GitHub 源码装（拿仓库当前代码，不走 npm）：
+
+```bash
+magpie plugin add github:MYCF711/magpie-loomy-auth
+```
+
+装完 `magpie plugin list` 应该看到：
 
 ```
 magpie-plugin-loomy-auth  on
@@ -14,280 +54,118 @@ magpie-plugin-loomy-auth  on
 
 ---
 
-## 这个插件修的是什么
+## 登录
 
-市场现有的 Loomy 插件把积分卡片报错了。**这不是外观问题** ——
-magpie 按每个非 `aside` 窗口的 `used` 给账号排序：
+三种方式，挑一个：
 
-```js
-// magpie 二进制里的原文
-const group = (w) => w.used >= 98 ? "spent" : w.used >= 90 ? "low" : "fine"
-// spent 的账号 "answers only when nothing else can"（排到最后）
-// usage 归一化时 used: Math.max(0, num(w?.used)) —— 插件不给就是 0
-```
-
-而现有插件根本不上报 `used`，于是 `used` 全被当成 0，**被蹬空的号以「满额」
-的姿态排在队首**。实测三天本机路由日志：
-
-| 事实 | 数字 |
-|---|---|
-| 所在组被实际选中 | 256 / 2592 = **9.9%** |
-| 其中命中余额为 0 的那个号 | **255 次** |
-| 带失败迹象 | 11 次，含 `Loomy: 积分余额不足，请获取积分后再试` |
-
-本插件的上报口径：
-
-| | 上报方式 | 理由 |
+| | 适用 | 要做什么 |
 |---|---|---|
-| **今日池** | 参与路由：`used` / `amount` / `limit` / `resetsAt` 齐全 | 它有周期（北京日）、有上限，是唯一该决定「现在能不能用这个号」的窗口 |
-| **永久池** | `aside: true`，只给 `display` | 它无周期、无上限。伪造 `total = 剩余` 就是把占比说谎 |
-| **两池皆空** | 合成一条 `used: 100` 的**参与路由**窗口 | 让这个号沉底。不画窗口 = 它继续以 0% 排在最前面 |
-| **上限未知** | `aside` + `used: 0`，显示「N 积分剩余（今日上限未知）」 | 宁可降级，也不谎报一个占比 |
+| **桌面端导入**（推荐） | 本机装了 Loomy 客户端并且登录着 | 点一下就好，不收短信 |
+| **手机号 + 短信** | 没装客户端 | 输 11 位手机号 → 收 6 位验证码 |
+| **粘贴 session** | 想手动导 | 从客户端登录态复制 session 串 |
 
-顺带修掉同源的第二个缺陷：签到返回的 `outcome` 必须是契约六个合法值之一
-（`claimed` / `done` / `ineligible` / `inactive` / `captcha` / `failed`）。
-现有插件返回 `"success"` —— 不在表里，magpie 一律归 `failed` 却**保留它的
-message**，于是界面出现「签到失败 · 每日赠送积分已刷新」这种自相矛盾的行。
+**会话固定 14 天，Loomy 没有续期接口。** 所以到期后必须重新登录一次 ——
+这个插件不会假装能自动续（那样 magpie 会以为一直可用，你反而收不到「请重新登录」的提示）。
+
+### 加第二个账号
+
+Loomy 的邀请机制：**邀请好友双方各得 5000 积分**。
+
+本插件在你添加新账号时，会**自动从本机已有账号里挑一个邀请码**带上去，
+不用你手动填。挑码规则很简单：用自己没用过的、还有余量的、用得最少的那个；
+新账号如果已经用过别人的码就跳过（每个号只能兑换一次）。
+
+所以你只要正常「添加账号」，那 5000 分自己就到手了。
 
 ---
 
-## 安装
+## 卡片刻度：两个池 + 一笔待领
 
-`magpie plugin add <tgz>` 不能用（它把 tgz 当 JS 模块 `import()`，报
-`exports no OpenCode plugin function`）。按包名 + 本地 `file:` 依赖装：
+Loomy 的积分分几处，卡片按它们真实的作用分开显示：
 
-```bash
-# 1. 打包
-npm pack --pack-destination ./dist
-
-# 2. tgz 放进 magpie 的 dist/
-cp dist/magpie-plugin-loomy-auth-0.1.1.tgz ~/.config/magpie/plugins/dist/
-
-# 3. plugins.json 追加
-#    { "spec": "magpie-plugin-loomy-auth" }
-# 4. plugins/package.json 的 dependencies 追加
-#    "magpie-plugin-loomy-auth": "./dist/magpie-plugin-loomy-auth-0.1.1.tgz"
-
-# 5. 用 magpie 自带的 bun 装
-cd ~/.config/magpie/plugins && ~/.cache/magpie/bun/1.4.4/magpie-bun.exe install
-
-# 6. 重启 magpie（见下：实测不必需，但重启是确定路径）
+```
+今日积分   ████████░░  4014 / 5000 积分         ← 有周期、有上限，决定现在能不能用这个号
+永久积分               5500 积分          (附加) ← 不会过期，不参与路由
+新手任务               可领 9500 积分（7 项待完成）(附加) ← 一次性，领完就没了
 ```
 
-### 装完要不要重启？
+看懂了就一句话：**只有「今日积分」会决定 magpie 把请求派给谁**，
+另外两笔只是告诉你「还有多少家底」。
 
-**实测（2026-10-26）：不必需。** 本地 tgz 装好、`plugins.json` 登记完成后，**运行中的
-magpie 在约几分钟内自行用上了新插件** —— 路由日志里同一个空号的 `used` 从 `0`
-变成 `100`（`2026-10-26T04:19:33`），期间没有重启（进程 PID 未变）。
+为什么这么分：今日池每天重置，用光了今天就是没了；永久积分不会过期，
+所以不该因为它多就优先烧它；新手任务是领一次就结束的，更不能拿它当常规额度。
 
-⚠ 触发机制**未查明**：二进制里没有 `fsnotify`/`Watcher`/`reloadPlugins` 符号，
-所以不是目录监听，疑似按 tick 复查配置。既然机制不明，**改完重启一次最稳** ——
-重启不会丢登录态（`plugin-auth.json` 不动），实测重启后 `plugin list` 仍是
-`loomy (Loomy, 10 models) signed in as 189****8051`。
+### 签到
 
-已验证：`magpie plugin list` 能列出 `magpie-plugin-loomy-auth on / loomy (Loomy, 10 models)`。
+magpie 按北京时间每天调一次签到，签到同时会：
+- 刷新当天额度（`今日积分` 回到满格）
+- **自动领取新手任务里已经完成的那几项**
 
-### ⚠ npm 包名与仓库名不是同一个
-
-| | 值 | 为什么 |
-|---|---|---|
-| 仓库名 | `magpie-loomy-auth` | GitHub 仓库，随便叫 |
-| **npm 包名** | **`magpie-plugin-loomy-auth`** | 见下 |
-
-**`magpie-loomy-auth` 这个包名在 npm 上已被他人占用**（0.3.2，维护者 `an0119`，
-仓库 `lin2670/magpie-plugins`，也是 Loomy 插件）。magpie 的「有新版本」检查按
-**包名**去 npm 查，与仓库属主无关 —— 所以撞名会让界面提示一个**别人的**新版，
-点「更新」就把别人的包装进来顶掉本插件（本机实测触发过：`waiting: [{package:
-"magpie-loomy-auth", version: "0.1.0", latest: "0.3.2"}]`）。
-
-⇒ 加 `-plugin-` 段避开，同时保留 `magpie` 前缀（便于按前缀搜索）。
-
-⚠ 本地用 `file:` tgz 安装时包名只是标识，改名代价只有一次重装；
-但**插件内 `REGISTRY_ENTRY.package` 必须与 package.json 的 `name` 一字不差**，
-否则自注册条目对不上市场卡片。
-
-
-⚠ **别和其它声明 `loomy` 的插件同时装** —— 两个插件抢同一个 provider id，
-`auths().get(provider)` 谁赢是未定义的。装本插件前先摘掉 `magpie-plugin-loomy`。
-
-**凭据形状与旧插件兼容**（`{type:"oauth", access, refresh, expires, accountId, uid, phone}`），
-所以已有登录态直接复用，**不用重新登录**。
-
----
-
-## 登录方式
-
-| 方式 | 说明 |
-|---|---|
-| **桌面端登录态导入** | 自动读本机 Loomy 客户端的 Local Storage（leveldb 明文，键 `loomy-auth-session`），无需短信 |
-| **手机号 + 短信验证码** | 中国大陆 11 位手机号 → 6 位验证码 |
-| **粘贴 session** | 手动粘贴客户端登录态，可带备注名 |
-
-Loomy **没有续期接口**（会话固定 14 天），所以本插件**不伪造 `refresh_token`** ——
-`auth.refresh` 恒返回 `undefined`。伪造的后果比过期更糟：magpie 会以为能自动续，
-把账号标记成「可恢复」，用户永远等不到「请重新登录」。
+签到结果会显示「今日额度已刷新（3479/5000 积分）」这种具体数字，不是含糊的失败/成功。
 
 ---
 
 ## 模型
 
-10 个 chat 模型（上游还下发 3 条 `type:"image"`，**按类型过滤掉** —— 它们不是
-对话模型，列出来就是让用户选中一个必然失败的东西）。
+10 个对话模型，都是实测的数字（不是抄文档）：
 
-| id | context | output | 视觉 | 倍率 |
+| 模型 | 上下文 | 最大输出 | 看图 | 倍率 |
 |---|---|---|---|---|
-| `DeepSeek-V4.1-Flash` | 1,048,576 | 384,000 | ✓ | x2.0 |
-| `spark-x2.6` | 1,048,576 | 131,072 | ✗ | x0.0 |
-| `spark-x` | 1,048,576 | 65,536 | ✗ | x0.0 |
-| `MiniMax-M3` | 1,048,576 | 512,000 | ✓ | x4.0 |
-| `Kimi-k2.6` | 262,144 | 65,536 | ✓ | x6.5 |
-| `qwen-3.8-max` | 1,000,000 | 65,536 | ✗ | x12.0 |
-| `GLM-5.3-Flash` | 1,048,576 | 131,072 | ✓ | x0.8 |
-| `qwen3.8-flash` | 1,000,000 | 131,072 | ✓ | x0.8 |
-| `mimo-v2.5` | 1,048,576 | 131,072 | ✓ | x3.3 |
-| `auto` | — | — | ✗ | — |
+| `DeepSeek-V4.1-Flash` | 1M | 384K | ✓ | x2.0 |
+| `MiniMax-M3` | 1M | 512K | ✓ | x4.0 |
+| `GLM-5.3-Flash` | 1M | 128K | ✓ | x0.8 |
+| `qwen3.8-flash` | 1M | 128K | ✓ | x0.8 |
+| `mimo-v2.5` | 1M | 128K | ✓ | x3.3 |
+| `qwen-3.8-max` | 1M | 64K | ✗ | x12.0 |
+| `Kimi-k2.6` | 256K | 64K | ✓ | x6.5 |
+| `spark-x2.6` | 1M | 128K | ✗ | **免费** |
+| `spark-x` | 1M | 64K | ✗ | **免费** |
+| `auto` | — | — | ✗ | 自动选 |
 
-以上全部取自一次实测（`GET /api/v1/models`），**不是文档抄的**。
-`context` 原样上报：magpie 把它转给 agent 决定何时压缩对话，而**路由组按
-组内最大值算窗口** —— 一个填小的成员会把整组拉低。
+**两个 `spark` 是限时免费的**（0 倍率，不扣积分）。如果你的路由组用「免费优先」，
+它们会被排在前面 —— 这个插件把「免费」这个标记也如实报给 magpie 了，
+别人做的插件漏了这一点，导致免费模型拿不到优先权。
 
-思考档位来自上游 `reasoning_efforts`：`none|low|medium|high|xhigh`，默认 `low`。
-`auto` 上游没有 thinking_config，因此不声明 reasoning。
+**思考档位**：`none / low / medium / high / xhigh`，默认 `low`，在 magpie 里直接选。
 
----
-
-## 协议要点（本插件依赖的实测事实）
-
-| 事实 | 影响 |
-|---|---|
-| `dailyQuota` / `dailyConsumed` / `dailyCycleDate` **只在** `POST /points/first-login`（写端点，幂等） | 上限只能签到/登录时拿到并记进凭据；**不许硬编码 5000**（活动会变） |
-| `/api/v1/points/balance` 只回 3 个数字（实测 61~233ms） | 热路径用它，是三家现有插件都没用的最小端点 |
-| `/api/v1/points/records` 每条 debit 带 `consumeSource` + `dailyCycleDate` | 上限的**降级推导**：`quota ≈ dailyBalance + Σ(本业务日 daily 扣分)`。两号实测吻合：0/0 → used 100%；有余额 → 3.96% |
-| 业务日按东八区，重置在次日 00:05 | `resetsAt` 用它；跨日旧上限**作废** |
-| 部分错误是 **HTTP 200 + 信封 `{code:"100002"}`** | 「状态码 ok」不等于成功，一律判业务码；失效时打 `X-Magpie-Sign-In: expired` |
-| deepseek 系模型只认 `<image_base64>` 标记 | `image_url` data URI 会被上游当截断的 base64 文本读，所以只对 deepseek 系改写 |
-| `POST /points/first-login` 幂等，判据是 `alreadyProcessed` | 「今天已领」必须是 `done` 而不是 `claimed` |
-
-### 新手任务：一次性可领的 1 万分
-
-Loomy 还有第三笔额度 —— **新手任务奖励**，总计 10,000 分，可主动领取：
-
-| key | 任务 | 分值 |
-|---|---|---|
-| `first_message` | 发送第一条消息 | 500 |
-| `pick_skill` | 选择一个技能 | 1000 |
-| `generate_ppt` | 生成第一份 PPT | 1500 |
-| `set_schedule` | 设置定时任务 | 1000 |
-| `install_skill` | 安装一个技能 | 1500 |
-| `configure_remote` | 配置远程控制 | 1000 |
-| `create_soul` | 创建第一个搭子 | 1500 |
-| `share_soul` | 分享搭子给朋友 | 2000 |
-
-端点：`GET /api/v1/onboarding/tasks`（只读）+ `POST /api/v1/onboarding/tasks/complete`
-（幂等写，判据 `alreadyCompleted`）。实测两个账号都能读；流水里能看到
-「新手任务-发送第一条消息 +500」的 credit 记录 —— **领取是真到账的**。
-
-插件怎么用它：
-
-- **卡片上是 `aside` 窗口**：「可领 9500 积分（7 项待完成）」。一次性奖励
-  **不参与路由打分**（不给 `limit`、`aside: true`）—— 否则一个任务没做完的号
-  会显得额度很足而被优先派活。
-- **签到成功后自动领**：领取是幂等的，放在每天一次的签到里做，既不会漏也不会
-  重复。按分值**从高到低**串行领（中途失败至少领到大的那几项），失败不影响
-  签到结果。
-- **单独缓存 10 分钟**：`onboarding/tasks` 是另一个端点，而 `usage` 会被频繁
-  刷新 —— 不能每次都打。
-
-> 实况：`181****0632` 余额 0，但还有 10,000 分新手任务可领。卡片会如实显示，
-> 不会因为「余额 0」就把这个人判死刑。
-
-### 邀请码：新账号自动用老账号的邀请资格
-
-Loomy 的「分享有礼」——**邀请好友双方各得 5000 积分**（客户端常量 `nb = 5e3`；
-⚠ 别和新手任务里 `share_soul` 的 2000 混，那是两笔不同的奖励）。
-
-每个账号有**专属邀请码**（实测：`189****8051` → `E4DPT6`、`181****00632` → `FDW3CU`，
-上限 1000 次、已用 0），并且**每个账号只能兑换一次**别人的码。
-
-| 端点 | 用途 |
-|---|---|
-| `GET /api/v1/invitation-codes` | 查自己的码（只读） |
-| `GET /api/v1/points/activation` | 本账号是否已用过别人的码（只读） |
-| `POST /api/v1/points/activation` | 绑定别人的码（一次性写） |
-| `POST /api/v1/points/first-login` | **也接受 `{inviteCode, deviceId}`** —— 首次初始化时捎上，不用事后再绑 |
-
-**这个插件怎么做的**：新账号登录时，自动从**本机其它已登录的 Loomy 账号**里挑一个
-邀请码带上去。
-
-- 挑码规则：排除自己的、用完的（`usedCount >= maxUses`）、非 `active` 的；
-  优先**用得最少**的（把额度摊开）；`maxUses <= 0` 视为不限次。
-- 先查 `activation`：**已用过就跳过**，不白发一次写请求（每账号只能用一次）。
-- 走 `first-login {inviteCode}`（首次初始化顺带绑定）；那条没成再退回
-  `points/activation`。**绑定失败不影响登录** —— 这是加分项。
-- 为什么能拿到别的账号的邀请码：`getAuth()` 只在当前账号作用域里可见
-  （magpie 的 `inScope`），所以直接读 `~/.config/magpie/plugin-auth.json`，
-  把 `loomy` / `loomy#xxxxxx` 全捞出来逐个查（只读、不打印 session）。
-
-```
-新账号登录 → 收集本机其它 Loomy 账号的邀请码 → 挑用得最少的
-          → 查 activation（已用过就跳过）→ first-login {inviteCode}
-          → 双方各 +5000
-```
-
-### 一次 `usage()` 的请求数
-
-| 情形 | 请求数 |
-|---|---|
-| 凭据里有当天 `dailyQuota`（签到/登录写过） | **1**（只读 balance） |
-| 凭据里没有当天上限 | 2（balance + 流水，翻页上限 6 页） |
-| 之后每一轮 | 回到 **1**（推导出来的上限会写回凭据） |
-
-写回走 `client.auth.set({path:{id}})`；它在账号作用域里把 id 解析成**当前账号**的键，
-所以多账号互不串（实测两号各自写回自己的 `dailyQuota`）。
+**图片**：支持视觉的模型可以直接发图。deepseek 系 Loomy 要求特殊格式，
+插件已自动转换（发标准格式会被上游当成乱码文本读）。
 
 ---
 
-## 测试
+## 常见问题
+
+**Q：装完没反应 / 还显示旧插件？**
+两个插件可能同时在。`magpie plugin list` 确认只有一个 `loomy`。
+改完配置重启一次 magpie 最稳（登录态不会丢）。
+
+**Q：显示「登录已失效」？**
+Loomy 会话 14 天到期，没有自动续期。重新登录一次即可。
+
+**Q：积分显示 0，但官方 App 里还有？**
+分两种情况：① 今日额度用光了，等北京时间 0 点后重置；② 那笔是**新手任务**，
+卡片上单独一行「可领 XXXX 积分」，签到后自动到账。
+
+**Q：这个插件会花我的积分吗？**
+不会。它只读余额、签到、领任务奖励。真正消耗积分的是你通过 magpie 发的对话请求。
+
+**Q：它能看到我的什么？**
+你的 Loomy 登录态（存在 magpie 自己的 `plugin-auth.json` 里），以及积分/模型/任务读数。
+插件直连 `loomyad.xunfei.cn`（业务）与 `account.xfinfr.com`（登录），不经过任何第三方中转。
+邀请码功能会读同文件里**其它 Loomy 账号**的邀请码 —— 只读、不发到别处。
+
+---
+
+## 卸载
 
 ```bash
-npm test                  # 42 条，全离线、零额度
-node tests/live.mjs       # 真实账号 + 真实上游（只读 + 幂等签到，不消费额度）
+magpie plugin rm magpie-plugin-loomy-auth
 ```
 
-单测锁死四组语义（**反向验证过**：把 `windowsOf` 改回市场插件的写法，其中
-4 条会变红；把签到 outcome 改回 `"success"`，2 条会变红）：
-
-1. 两池皆 0 → 一条 `used:100` 的**参与路由**窗口（不许 aside、不许消失）
-2. 永久池恒 `aside` 且不给 `amount`/`limit`
-3. 上限未知 → `aside` + `used:0`，绝不谎报成满额
-4. 上限已知 → 真实占比 + 完整字段；跨日旧上限作废
-
-`tests/live.mjs` 在真账号上的当前输出（2026-10-26）：
-
-```
-=== loomy  18970098051
-    balance=8979 积分  used=30.42%  limit=5000  永久池 aside
-    checkin → {"outcome":"done","message":"今日额度已刷新（3479/5000 积分）"}
-=== loomy#0zloqw  18170800632
-    balance=0 积分  used=100  ← 参与路由，会让这个号沉底
-    checkin → {"outcome":"done",...}
-✅ 全部通过
-```
-
----
-
-## 已知取舍
-
-- **不做二维码 / 微信登录**：上游把微信登录放在一个需要本地起页面的流程里，
-  而桌面端导入 + 短信已经覆盖同一批账号；少一条链路少一份维护面。
-- **不做「锁定永久积分」开关**：本插件把永久池恒标 `aside`（不参与路由），
-  于是 magpie 只在其它号都不可用时才用它 —— 这已经是「优先别烧永久积分」的语义，
-  不需要再加一个开关。
-- **不做多账号并发选号**：magpie 自己管这个（`signInKey` → 账号作用域）。
-  插件只负责把一个账号的真实读数报准 —— 报准了，选号自然对。
+登录态留在 magpie 的凭据里，重装即恢复，不用重新登录。
 
 ---
 
 ## 许可
 
-MIT
+MIT。协议细节、实现判据、测试与取舍见 [`docs/internals.md`](docs/internals.md)。

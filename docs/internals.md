@@ -139,38 +139,64 @@ Loomy 还有第三笔额度 —— **新手任务奖励**，总计 10,000 分，
 > 实况：`181****0632` 余额 0，但还有 10,000 分新手任务可领。卡片会如实显示，
 > 不会因为「余额 0」就把这个人判死刑。
 
-### 邀请码：新账号自动用老账号的邀请资格
+### 邀请码：签到时自动兑换（不在注册时）
 
-Loomy 的「分享有礼」——**邀请好友双方各得 5000 积分**（客户端常量 `nb = 5e3`；
-⚠ 别和新手任务里 `share_soul` 的 2000 混，那是两笔不同的奖励）。
+**实测结论（2026-10-26，真号跑的）**：邀请双方**各得 5000**，不是 2000。
 
-每个账号有**专属邀请码**（实测：`189****8051` → `E4DPT6`、`181****00632` → `FDW3CU`，
-上限 1000 次、已用 0），并且**每个账号只能兑换一次**别人的码。
+```
+操作：181****0632 兑换 189****8051 的码 E4DPT6（走 bindInviteCode → POST /points/activation）
+
+189****8051  永久积分 14860 → 19860  (+5000)   流水：+5000 邀请好友奖励
+181****0632  永久积分 10000 → 15000  (+5000)   流水：+5000 填写邀请码奖励
+E4DPT6  usedCount 0 → 1                       181 activation false → true
+```
 
 | 端点 | 用途 |
 |---|---|
-| `GET /api/v1/invitation-codes` | 查自己的码（只读） |
-| `GET /api/v1/points/activation` | 本账号是否已用过别人的码（只读） |
-| `POST /api/v1/points/activation` | 绑定别人的码（一次性写） |
-| `POST /api/v1/points/first-login` | **也接受 `{inviteCode, deviceId}`** —— 首次初始化时捎上，不用事后再绑 |
+| `GET /api/v1/invitation-codes` | 查自己的码（只读）。回 `{inviteCode, usedCount, maxUses, status}` |
+| `GET /api/v1/points/activation` | 本号是否已兑换过；回 `{activated, appliedInvitationCode}` |
+| `POST /api/v1/points/activation` | 绑定别人的码（**每账号一次**） |
+| `POST /api/v1/points/first-login` | **也接受 `{inviteCode, deviceId}`** |
 
-**这个插件怎么做的**：新账号登录时，自动从**本机其它已登录的 Loomy 账号**里挑一个
-邀请码带上去。
+#### 为什么放在签到里，而不是登录时
 
-- 挑码规则：排除自己的、用完的（`usedCount >= maxUses`）、非 `active` 的；
-  优先**用得最少**的（把额度摊开）；`maxUses <= 0` 视为不限次。
-- 先查 `activation`：**已用过就跳过**，不白发一次写请求（每账号只能用一次）。
-- 走 `first-login {inviteCode}`（首次初始化顺带绑定）；那条没成再退回
-  `points/activation`。**绑定失败不影响登录** —— 这是加分项。
-- 为什么能拿到别的账号的邀请码：`getAuth()` 只在当前账号作用域里可见
-  （magpie 的 `inScope`），所以直接读 `~/.config/magpie/plugin-auth.json`，
-  把 `loomy` / `loomy#xxxxxx` 全捞出来逐个查（只读、不打印 session）。
+邀请码的有效期是「账号存在期间」，不是「注册那一刻」。放签到里覆盖两种情形：
+新号第一次签到、老号后来才想用。注册流程里不用塞输入框。
+
+`auth.checkin` 现在一次做三件事（全部幂等，重复调用无害）：
 
 ```
-新账号登录 → 收集本机其它 Loomy 账号的邀请码 → 挑用得最少的
-          → 查 activation（已用过就跳过）→ first-login {inviteCode}
-          → 双方各 +5000
+① POST /points/first-login        刷新每日额度（拿 dailyQuota）
+② GET|POST /onboarding/tasks*     领新手任务
+③ GET /points/activation          确认没兑换过
+   GET /invitation-codes (本机其它账号)  取候选
+   POST /points/activation        兑换选中的码
 ```
+
+②③ 失败都不影响签到结果 —— 它们是顺带做的事，不是前置条件。
+
+#### ⚠ 互刷防护（实测踩到过）
+
+第一次实现只排除了「自己的码」，于是发生了：
+
+```
+189 兑换了 181 的 FDW3CU   → +5000（填写邀请码奖励）
+181 兑换了 189 的 E4DPT6   → +5000（填写邀请码奖励）
+两个号又各自拿到 邀请好友奖励 +5000
+⇒ 各得 10000，等于两笔邀请的全部收益
+```
+
+**修法**：本号自己的码 `usedCount > 0`（说明已有人邀请过本号这边的关系）时，
+**不再兑换别人的码**。互刷必然要求双方各用一次，所以这条即可堵住。
+单向成链仍然允许 —— 实测 181 兑换了 189 的码之后，它自己的 `FDW3CU` 仍是
+`active` / `usedCount 0`，可以继续邀请第三个人。
+
+#### 候选从哪来
+
+`getAuth()` 只在当前账号作用域可见（magpie 的 `inScope`），拿不到别的账号。
+所以直接读 `~/.config/magpie/plugin-auth.json`，把 `loomy` / `loomy#xxxxxx`
+全捞出来逐个查（只读，session 不打印、不外发）。挑码规则：
+排除自己的、用完的（`usedCount >= maxUses`）、非 `active` 的；优先 `usedCount` 最小的。
 
 ### 一次 `usage()` 的请求数
 

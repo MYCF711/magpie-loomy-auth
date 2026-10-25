@@ -266,3 +266,29 @@ test("maxUses<=0 视为不限次", () => {
   const picked = pickInviteCode([{ code: "NOLIMIT", usedCount: 999, maxUses: 0, status: "active" }], "")
   assert.equal(picked.code, "NOLIMIT")
 })
+
+// ── 互刷防护（实测踩到过：189 与 181 互相兑换，各得 10000）──────────
+
+test("自己的码被用过之后，就不该再用别人的码（互刷必然要求双方各用一次）", () => {
+  // 这条规则在 index.mjs 的 pickInviteFor 里（依赖网络，故此处只锁纯函数判据）
+  // 纯函数层要保证：pickInviteCode 永远不返回自己的码
+  const { pickInviteCode } = pure
+  const mine = { code: "MINE01", usedCount: 0, maxUses: 1000, status: "active" }
+  const other = { code: "OTHR02", usedCount: 0, maxUses: 1000, status: "active" }
+  const picked = pickInviteCode([mine, other], "MINE01")
+  assert.equal(picked.code, "OTHR02", "绝不能返回自己的码")
+})
+
+test("只有自己的码时挑不出来（不能自己邀请自己）", () => {
+  const { pickInviteCode } = pure
+  const mine = { code: "MINE01", usedCount: 0, maxUses: 1000, status: "active" }
+  assert.equal(pickInviteCode([mine], "MINE01"), undefined)
+})
+
+test("已被别人用过的码仍可继续邀请新号（单向成链是允许的）", () => {
+  const { pickInviteCode } = pure
+  // 实测：181 兑换了 189 的码之后，181 自己的码仍 active、usedCount 0
+  const inviterBeenUsed = { code: "E4DPT6", usedCount: 1, maxUses: 1000, status: "active" }
+  const picked = pickInviteCode([inviterBeenUsed], "MYCODE")
+  assert.equal(picked.code, "E4DPT6", "被用过一次的码要能继续邀请下一个人")
+})

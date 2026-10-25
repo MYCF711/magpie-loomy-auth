@@ -179,17 +179,23 @@ export const LoomyAuthPlugin = async ({ client, directory } = {}) => {
    *   平台侧可能视作互刷。
    */
   const pickInviteFor = async (session) => {
-    // 已兑换过就到此为止（每账号一次）
+    // ① **判据只有一条：本号是否已经被邀请过。**
+    //
+    //    平台规则就这一条（客户端文案：「每个账号仅能兑换一次」「你已经兑换过积分啦」）。
+    //    所以不需要知道「谁邀请了谁」—— 那信息接口根本不提供
+    //    （`invitation-codes` 只回 `usedCount` 这个数量，不说是谁）。
+    //    `appliedInvitationCode` 只用于日志，不参与判断。
     let applied
     try {
       const st = await fetchActivation(session)
       if (st.activated) return undefined
       applied = st.appliedInvitationCode
     } catch {
+      // 读不到状态就别乱兑换 —— 宁可这一天不换
       return undefined
     }
 
-    // 本号自己的码（要从候选里排除）
+    // ② 本号自己的码要从候选里排除（不能自己邀请自己）
     let selfCode
     try {
       const mine = await fetchInviteCodes(session)
@@ -198,35 +204,11 @@ export const LoomyAuthPlugin = async ({ client, directory } = {}) => {
       selfCode = undefined
     }
 
-    // ⚠⚠ **互相邀请**要去掉：如果本号的码已经被别人用过（`usedCount > 0`），
-    //   那用它的那个人反过来又能拿本号的码 —— 两个号互相邀请、各拿两笔
-    //   5000，就是刷。实测踩到过：189 与 181 互相兑换，各得 10000。
-    //
-    //   判据不靠猜：本机每张码的 `usedCount` 就是「被几个人用过」。
-    //   只要本号自己的码 `usedCount > 0`，说明有人邀请过本号这边的关系，
-    //   此时**已经兑换过就别再换**（上面 `activated` 已拦住），
-    //   而本号自己的码继续留给**新来的号**用 —— 单向，不成环。
-    //
-    //   更严格的一层：把「已经用掉本号码的那些账号的码」也排除。
-    //   但 `usedCount` 只给数量、不给是谁，所以能做到的就是：
-    //   **本号码一旦被用过，就再也不用别人的码**（互刷必然要求双方各用一次）。
-    let selfUsed = 0
-    try {
-      const mine = await fetchInviteCodes(session)
-      selfUsed = mine[0]?.usedCount ?? 0
-    } catch {
-      selfUsed = 0
-    }
-    if (selfUsed > 0) {
-      log(`本号的邀请码已被 ${selfUsed} 人使用，不再兑换别人的码（避免互刷）`)
-      return undefined
-    }
-
+    // ③ 从本机**别的账号**的码里挑一个还有余量的
     const candidates = await collectInviteCandidates(session)
     const picked = _pure.pickInviteCode(candidates, selfCode)
     if (!picked) return undefined
-    // 再排一层：**本号已经用过的那个码**不能重复用（服务端也会拒，但别白发请求）
-    if (applied && picked.code === applied) return undefined
+    if (applied && picked.code === applied) return undefined // 理论上不可达，防御性保留
     return picked.code
   }
 

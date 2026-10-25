@@ -267,28 +267,29 @@ test("maxUses<=0 视为不限次", () => {
   assert.equal(picked.code, "NOLIMIT")
 })
 
-// ── 互刷防护（实测踩到过：189 与 181 互相兑换，各得 10000）──────────
+// ── 邀请码的判据（每号只能被邀请一次）────────────────────────────────
+//
+// ⚠ 这里**不**测「互刷防护」。平台没有这条规则：
+//   实测 189 与 181 互相兑换成功，各得 10000，服务端没报错。
+//   而「谁邀请了谁」接口根本不给（`invitation-codes` 只回 usedCount）。
+//   所以插件侧能守的只有平台自己的那条：**每号只能被邀请一次**
+//   （`points/activation` 的 `activated`），它由 index.mjs 的 pickInviteFor 判。
 
-test("自己的码被用过之后，就不该再用别人的码（互刷必然要求双方各用一次）", () => {
-  // 这条规则在 index.mjs 的 pickInviteFor 里（依赖网络，故此处只锁纯函数判据）
-  // 纯函数层要保证：pickInviteCode 永远不返回自己的码
+test("自己的码永远不进候选（不能自己邀请自己）", () => {
   const { pickInviteCode } = pure
   const mine = { code: "MINE01", usedCount: 0, maxUses: 1000, status: "active" }
   const other = { code: "OTHR02", usedCount: 0, maxUses: 1000, status: "active" }
-  const picked = pickInviteCode([mine, other], "MINE01")
-  assert.equal(picked.code, "OTHR02", "绝不能返回自己的码")
+  assert.equal(pickInviteCode([mine, other], "MINE01").code, "OTHR02")
 })
 
-test("只有自己的码时挑不出来（不能自己邀请自己）", () => {
+test("只有自己的码时挑不出来", () => {
   const { pickInviteCode } = pure
   const mine = { code: "MINE01", usedCount: 0, maxUses: 1000, status: "active" }
   assert.equal(pickInviteCode([mine], "MINE01"), undefined)
 })
 
-test("已被别人用过的码仍可继续邀请新号（单向成链是允许的）", () => {
+test("被用过一次的码可以继续邀请下一个人（每条链 1000 个名额）", () => {
   const { pickInviteCode } = pure
-  // 实测：181 兑换了 189 的码之后，181 自己的码仍 active、usedCount 0
-  const inviterBeenUsed = { code: "E4DPT6", usedCount: 1, maxUses: 1000, status: "active" }
-  const picked = pickInviteCode([inviterBeenUsed], "MYCODE")
-  assert.equal(picked.code, "E4DPT6", "被用过一次的码要能继续邀请下一个人")
+  const used = { code: "E4DPT6", usedCount: 1, maxUses: 1000, status: "active" }
+  assert.equal(pickInviteCode([used], "MYCODE").code, "E4DPT6")
 })

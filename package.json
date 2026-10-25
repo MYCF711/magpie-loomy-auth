@@ -11,7 +11,8 @@
     "docs",
     "README.md",
     "NOTICE.md",
-    "LICENSE"
+    "LICENSE",
+    "assets"
   ],
   "keywords": [
     "magpie",
@@ -35,6 +36,7 @@
     "test": "node --test tests/"
   },
   "magpie": {
+    "icon": "https://raw.githubusercontent.com/MYCF711/magpie-loomy-auth/main/assets/icon.png",
     "maxConcurrency": 4
   },
   "bugs": {

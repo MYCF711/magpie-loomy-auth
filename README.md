@@ -55,6 +55,37 @@ magpie 每天调一次，一次做完三件事：刷新今日额度、领新手�
 
 先卸掉别的 Loomy 插件 —— 会抢同一个供应商。
 
+### 命令行
+
+```bash
+# 从 npm（推荐）
+magpie plugin add magpie-plugin-loomy-auth
+
+# 从仓库源码（拿最新代码，不走 npm）
+magpie plugin add github:MYCF711/magpie-loomy-auth
+
+# 本地 tgz（自己改了代码）
+npm pack --pack-destination ./dist
+cp dist/magpie-plugin-loomy-auth-*.tgz ~/.config/magpie/plugins/dist/
+# plugins.json          追加 { "spec": "magpie-plugin-loomy-auth" }
+# plugins/package.json  追加 "magpie-plugin-loomy-auth": "./dist/magpie-plugin-loomy-auth-*.tgz"
+cd ~/.config/magpie/plugins && ~/.cache/magpie/bun/1.4.4/magpie-bun.exe install
+```
+
+⚠ **`magpie plugin add <tgz路径>` 用不了** —— 它把 tgz 当 JS 模块 `import()`，报
+`exports no OpenCode plugin function`（实测 0.1.1254）。本地包必须走上头那套
+`plugins.json` 登记 + `bun install`。
+
+装完确认：
+
+```bash
+magpie plugin list
+# magpie-plugin-loomy-auth  on
+#   loomy (Loomy, 10 models)  signed in as 189****8051
+```
+
+⚠ 改了代码要 **bump `version` 再打包** —— 同一版本号重打，bun 会命中缓存（输出 `no changes`）。
+
 ---
 
 ## 常见问题

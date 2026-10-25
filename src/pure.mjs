@@ -77,6 +77,13 @@ export const _pure = {
   ensureSuccess,
   looksLikeInsufficientPoints,
   checkinOutcome,
+
+  onboardingPoints,
+  onboardingTitles,
+  normalizeTasks,
+  earnedPoints,
+  pendingTasks,
+  onboardingWindow,
 }
 
 const round = (n) => Math.round(n * 100) / 100
@@ -650,5 +657,112 @@ function checkinOutcome(raw) {
     outcome: "claimed",
     credit,
     message: `每日赠送额度已刷新（+${credit} 积分）`,
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════
+// ⑨ 新手任务（onboarding）—— 一次性可领的 1 万分
+// ════════════════════════════════════════════════════════════════════
+//
+// Loomy 把「新手任务」的奖励做成一笔**可主动领取**的积分，总计 10,000 分：
+//
+// | key | 任务 | 分值 |
+// |---|---|---|
+// | first_message | 发送你的第一条消息 | 500 |
+// | pick_skill | 试试选择一个技能 | 1000 |
+// | generate_ppt | 生成第一份 PPT | 1500 |
+// | set_schedule | 设置定时任务 | 1000 |
+// | install_skill | 在技能广场安装一个技能 | 1500 |
+// | configure_remote | 配置远程控制 | 1000 |
+// | create_soul | 创建你的第一个搭子 | 1500 |
+// | share_soul | 把搭子分享给朋友 | 2000 |
+//
+// 端点：`GET /api/v1/onboarding/tasks`（只读）与
+// `POST /api/v1/onboarding/tasks/complete {key}`（幂等写）。
+// 实测（2026-10-26）：两个账号都能读，`first_message` 已完成的那个账号
+// 流水里确实有「新手任务-发送第一条消息 +500」的 credit 记录 —— 说明
+// 领取是真到账的，不是展示用的假数字。
+//
+// ⚠ 这笔钱**不参与每日池**，也不该拿它去算占比（它是一次性的，
+// 领完就没了）。所以只作为 `aside` 窗口展示「还能领多少」，不驱动路由。
+
+/** 任务 key → 分值。**上游可能调**，所以按「未知 key 忽略」处理，不硬断言总数。 */
+function onboardingPoints() {
+  return {
+    first_message: 500,
+    pick_skill: 1000,
+    generate_ppt: 1500,
+    set_schedule: 1000,
+    install_skill: 1500,
+    configure_remote: 1000,
+    create_soul: 1500,
+    share_soul: 2000,
+  }
+}
+
+function onboardingTitles() {
+  return {
+    first_message: "发送第一条消息",
+    pick_skill: "选择一个技能",
+    generate_ppt: "生成第一份 PPT",
+    set_schedule: "设置定时任务",
+    install_skill: "安装一个技能",
+    configure_remote: "配置远程控制",
+    create_soul: "创建第一个搭子",
+    share_soul: "分享搭子给朋友",
+  }
+}
+
+/** 把上游 `tasks` 归一成只有已知 key 的布尔表（未知 key 丢掉，缺的补 false）。 */
+function normalizeTasks(raw) {
+  const src = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {}
+  const out = {}
+  for (const key of Object.keys(onboardingPoints())) out[key] = src[key] === true
+  return out
+}
+
+/** 已领取的分值合计。 */
+function earnedPoints(tasks) {
+  const points = onboardingPoints()
+  let sum = 0
+  for (const [key, value] of Object.entries(points)) if (tasks?.[key] === true) sum += value
+  return sum
+}
+
+/**
+ * 未领取的任务，按分值从高到低（先领大的）。
+ *
+ * ⚠ 只列**未完成**的：已完成的再 POST 是幂等的，但没必要发请求。
+ * ⚠ 不要在 usage 的热路径上调这个 —— 它是另一个端点，而 usage 会频繁刷新。
+ *   只在 checkin（每天一次）和显式领取时读。
+ */
+function pendingTasks(tasks) {
+  const points = onboardingPoints()
+  const titles = onboardingTitles()
+  return Object.entries(points)
+    .filter(([key]) => tasks?.[key] !== true)
+    .map(([key, value]) => ({ key, points: value, title: titles[key] }))
+    .sort((a, b) => b.points - a.points)
+}
+
+/**
+ * 新手任务作为一个 `aside` 窗口：只说「还能领多少」，不参与路由。
+ *
+ * 为什么不参与路由：这笔额度是一次性的，领完即止；把它算进占比会让
+ * 一个「任务没做完」的账号看起来还有大量额度，从而被优先派活。
+ */
+function onboardingWindow(tasks, total) {
+  const points = onboardingPoints()
+  const earned = earnedPoints(tasks)
+  const cap = Number.isFinite(total) && total > 0 ? total : Object.values(points).reduce((a, b) => a + b, 0)
+  const left = Math.max(0, cap - earned)
+  if (left <= 0) return null
+  const pending = pendingTasks(tasks).length
+  return {
+    name: "新手任务",
+    used: 0,
+    aside: true,
+    display: `可领 ${left} 积分（${pending} 项待完成）`,
+    unit: "积分",
   }
 }

@@ -5,7 +5,7 @@ import assert from "node:assert/strict"
 
 import { _internal } from "../index.mjs"
 
-const { pure, quotaPatch } = _internal
+const { pure, quotaPatch, staticModels } = _internal
 const { checkinOutcome, credentialOf, maskPhone, rewriteImagesToTags, prefersTagFormat, parseModels, splitRateSuffix } = pure
 
 const LEGAL = ["claimed", "done", "ineligible", "inactive", "captcha", "failed"]
@@ -127,4 +127,56 @@ test("倍率从展示名尾部拆出，中英文括号都认", () => {
   assert.deepEqual(splitRateSuffix("MiniMax M3 （x4.0）"), ["MiniMax M3", "x4.0"])
   assert.deepEqual(splitRateSuffix("Spark-X2.5（限时免费）(x0.0)"), ["Spark-X2.5（限时免费）", "x0.0"])
   assert.deepEqual(splitRateSuffix("自动 · 均衡"), ["自动 · 均衡", undefined])
+})
+
+// ── free 字段（决定 magpie 的 Free first 路由档）─────────────────────
+
+test("上游写明「限时免费」或倍率 x0.0 的模型才 free=true", () => {
+  const { isFreeModel } = pure
+  // 两个 Spark：上游展示名既写了「限时免费」，倍率也是 x0.0
+  assert.equal(isFreeModel("Spark-X2.6 正式版(限时免费)(x0.0)", "x0.0"), true)
+  assert.equal(isFreeModel("Spark-X2.5（限时免费）(x0.0)", "x0.0"), true)
+  // 只看倍率也成立
+  assert.equal(isFreeModel("Some Model(x0.0)", "x0.0"), true)
+  assert.equal(isFreeModel("Some Model", "x0.00"), true)
+  // 收费模型
+  assert.equal(isFreeModel("DeepSeek V4.1 Flash(x2.0)", "x2.0"), false)
+  assert.equal(isFreeModel("GLM 5.3 Flash(x0.8)", "x0.8"), false)
+})
+
+test("⚠ 不能只看 rate=0 —— 「套餐内不按次计费」不是免费（qoder 的 ultimate/dfmodel 就是这种）", () => {
+  const { isFreeModel } = pure
+  assert.equal(isFreeModel("Ultimate", undefined), false)
+  assert.equal(isFreeModel("DeepSeek-Flash", undefined), false)
+  // 唯一的例外是倍率文本明确写了 0
+  assert.equal(isFreeModel("Spark-X2.5", "x0.0"), true)
+})
+
+test("Loomy 的 auto 不是免费（它会落到别的模型上花积分）", () => {
+  const { isFreeModel } = pure
+  assert.equal(isFreeModel("自动 · 均衡", undefined), false)
+})
+
+test("parseModels 把 free 从上游展示名解析出来", () => {
+  const rows = parseModels({
+    data: [
+      { id: "spark-x2.6", type: "chat", name: "Spark-X2.6 正式版(限时免费)(x0.0)", context_length: 1048576 },
+      { id: "DeepSeek-V4.1-Flash", type: "chat", name: "DeepSeek V4.1 Flash(x2.0)", context_length: 1048576 },
+      { id: "auto", type: "chat", name: "自动 · 均衡" },
+    ],
+  })
+  const by = Object.fromEntries(rows.map((r) => [r.id, r]))
+  assert.equal(by["spark-x2.6"].free, true)
+  assert.equal(by["DeepSeek-V4.1-Flash"].free, false)
+  assert.equal(by["auto"].free, false)
+})
+
+test("静态表里两个 Spark 必须是 free=true（缓存/未登录时也要对）", () => {
+  const m = staticModels()
+  assert.equal(m["spark-x2.6"].free, true)
+  assert.equal(m["spark-x"].free, true)
+  assert.equal(m.auto.free, false)
+  for (const id of ["DeepSeek-V4.1-Flash", "MiniMax-M3", "Kimi-k2.6", "qwen-3.8-max", "GLM-5.3-Flash", "qwen3.8-flash", "mimo-v2.5"]) {
+    assert.equal(m[id].free, false, `${id} 不该是 free`)
+  }
 })

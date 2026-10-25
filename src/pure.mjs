@@ -61,6 +61,7 @@ export const _pure = {
   normalizeCode,
 
   splitRateSuffix,
+  isFreeModel,
   parseModels,
   modelShape,
 
@@ -353,6 +354,31 @@ function splitRateSuffix(name) {
 }
 
 /**
+ * 这个模型**不花账号的积分**吗？—— magpie 的 `free` 字段。
+ *
+ * 为什么需要它：magpie 有 `"free"` 这个路由模式（界面叫 *Free first*），
+ * 契约原文是「模型供应商不消耗本订阅的额度或积分」。命中它的模型会被
+ * **优先派发**，所以标错等于把本该免费的请求算进收费档。
+ *
+ * ⚠ 判据**不能**只看 `rate === 0`：
+ *   - 本机实测 `plugin-providers.json` 里 `rate === 0` 的条目 51 条，
+ *     其中 `free: true` 只有 13 条 —— 其余是「套餐内不按次计费」，
+ *     例如 qoder 的 `ultimate` / `dfmodel`，它们仍消耗套餐额度，不是免费。
+ *   - Loomy 的 `auto`（自动·均衡）也没有倍率文本，但它会落到别的模型上
+ *     去花积分，同样不是免费。
+ *
+ * Loomy 的判据只有两条，且都来自上游自己的文字：
+ *   1. 展示名里明确写了「免费」（如 `Spark-X2.6 正式版(限时免费)(x0.0)`）
+ *   2. 倍率文本是 `x0.0`（成本 0 倍，即不扣分）
+ * 两者都是上游写在 `name` 里的声明，不是我们从别处推的。
+ */
+function isFreeModel(displayName, rate) {
+  const name = String(displayName ?? "")
+  if (/免费/.test(name)) return true
+  return typeof rate === "string" && /^x0(\.0+)?$/i.test(rate.trim())
+}
+
+/**
  * 解析 `GET /api/v1/models`（实测 13 条 chat 模型）。
  *
  * ⚠ 只保留 `type === "chat"`：上游还下发 image 型条目，列出来就是
@@ -385,6 +411,7 @@ function parseModels(payload) {
       defaultEffort:
         typeof row?.default_reasoning_effort === "string" ? row.default_reasoning_effort : undefined,
       rate,
+      free: isFreeModel(row?.name, rate),
     })
   }
   return out
@@ -432,10 +459,10 @@ function modelShape(m, base = {}) {
       ? Object.fromEntries((efforts.length ? efforts : ["low", "medium", "high"]).map((e) => [e, {}]))
       : {},
   }
-  if (m.rate) {
-    shape.rate = m.rate
-    shape.free = false
-  }
+  if (m.rate) shape.rate = m.rate
+  // ⚠ free 只由模型自己的声明决定（见 isFreeModel 的判据），
+  //   **不要**在这里按「有没有 rate」反推 —— 那样 `x0.0` 会被误判成收费。
+  shape.free = m.free === true
   return shape
 }
 

@@ -300,3 +300,67 @@ async function rawGet(url, headers, fetcher) {
 }
 
 export { looksLikeInsufficientPoints, AUTH_ERROR_CODES, readNum2 as readNumOr }
+
+// ════════════════════════════════════════════════════════════════════
+// 新手任务（onboarding）
+// ════════════════════════════════════════════════════════════════════
+
+/**
+ * 读新手任务状态（**只读**）。
+ *
+ * `GET /api/v1/onboarding/tasks` 实测回 `{tasks:{key:bool}, earned, total}`。
+ * ⚠ 不要在 usage 的热路径上调它（另一个端点 + 会频繁刷新）。
+ */
+export async function fetchOnboarding(session, fetcher = fetch) {
+  const data = await tokenRequest("GET", "/api/v1/onboarding/tasks", session, undefined, "新手任务查询", fetcher)
+  return {
+    tasks: _pure.normalizeTasks(data?.tasks),
+    earned: readNum(data?.earned) ?? _pure.earnedPoints(_pure.normalizeTasks(data?.tasks)),
+    total: readNum(data?.total),
+  }
+}
+
+/**
+ * 领取一个任务（**幂等写**）。
+ *
+ * 判据是响应体的 `alreadyCompleted`（重复领取同样回 200）。
+ * 返回 `{ ok, alreadyCompleted, balance }`，不抛错 —— 批量领取不该因一项失败中断。
+ */
+export async function completeTask(session, key, fetcher = fetch) {
+  try {
+    const data = await tokenRequest(
+      "POST",
+      "/api/v1/onboarding/tasks/complete",
+      session,
+      { key },
+      "新手任务领取",
+      fetcher,
+    )
+    return {
+      ok: true,
+      alreadyCompleted: data?.alreadyCompleted === true,
+      balance: readNum(data?.balance),
+    }
+  } catch (error) {
+    return { ok: false, message: String(error?.message ?? error).slice(0, 200) }
+  }
+}
+
+/**
+ * 一次性领完所有未完成的任务。
+ *
+ * ⚠ 按**分值从高到低**领：万一中途失败，领到的是大的那几项。
+ * ⚠ 每项之间不并发：上游对同一账号的并发不友好（对话通道实测会 403），
+ *   串行虽然慢一点，但不会把号打成风控。
+ */
+export async function claimAllTasks(session, tasks, fetcher = fetch) {
+  const pending = _pure.pendingTasks(tasks ?? {})
+  const claimed = []
+  const failed = []
+  for (const item of pending) {
+    const r = await completeTask(session, item.key, fetcher)
+    if (r.ok) claimed.push({ ...item, alreadyCompleted: r.alreadyCompleted })
+    else failed.push({ ...item, message: r.message })
+  }
+  return { claimed, failed }
+}

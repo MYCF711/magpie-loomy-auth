@@ -68,7 +68,7 @@ import {
   SESSION_TTL_MS,
   INTEGRATION_BASE,
 } from "./src/constants.mjs"
-import { claimDailyQuota, loginBySmsCode, fetchBalances, sendSmsCode } from "./src/api.mjs"
+import { claimDailyQuota, loginBySmsCode, fetchBalances, sendSmsCode, fetchOnboarding, claimAllTasks } from "./src/api.mjs"
 import { readDesktopSession } from "./src/desktop.mjs"
 import { staticModels, liveModels } from "./src/models.mjs"
 import { readUsage, publicUsage, quotaToRemember, clearUsageCache } from "./src/usage.mjs"
@@ -102,6 +102,26 @@ export const LoomyAuthPlugin = async ({ client, directory } = {}) => {
 
   // 目录进程内缓存：session -> { at, models }
   const catalog = new Map()
+
+  // 新手任务缓存：session -> { at, value }。10 分钟，足够跟上任务进度，
+  // 又不至于让每次 usage 刷新都多打一个端点。
+  const onboardingCache = new Map()
+  const ONBOARDING_TTL_MS = 10 * 60_000
+
+  const onboardingWindowFor = async (credential) => {
+    const hit = onboardingCache.get(credential.session)
+    if (hit && Date.now() - hit.at < ONBOARDING_TTL_MS) return hit.value
+    let value = null
+    try {
+      const state = await fetchOnboarding(credential.session)
+      value = _pure.onboardingWindow(state.tasks, state.total)
+    } catch {
+      // 拿不到就不画这一格 —— 不许因为一个加分项让整张卡片报错
+      value = null
+    }
+    onboardingCache.set(credential.session, { at: Date.now(), value })
+    return value
+  }
 
   /**
    * 把 quota 写回凭据，让下次 usage 走「0 额外请求」的快路径。
@@ -332,7 +352,12 @@ export const LoomyAuthPlugin = async ({ client, directory } = {}) => {
         const patch = quotaToRemember(value, credential)
         if (patch) await remember(provider?.id ?? PROVIDER, auth, patch)
 
-        return publicUsage(value)
+        const usage = publicUsage(value)
+        // 新手任务：一次性可领的 1 万分，只做 aside 展示（不参与路由）。
+        // ⚠ 单独缓存 10 分钟 —— 它是另一个端点，而 usage 会被频繁刷新。
+        const extra = await onboardingWindowFor(credential)
+        if (extra) usage.windows = [...(usage.windows ?? []), extra]
+        return usage
       },
 
       // ═══ ⑥ 签到 ═══════════════════════════════════════════════════
@@ -356,6 +381,25 @@ export const LoomyAuthPlugin = async ({ client, directory } = {}) => {
           // 让卡片立刻反映新的上限（而不是等 60 秒 TTL）
           await remember(provider?.id ?? PROVIDER, auth, quotaPatch(claim))
           clearUsageCache()
+        }
+
+        // 新手任务跟着签到一起领：它们本就是「登录后的一次性引导奖励」，
+        // 放在每天一次的签到里做，既不会漏也不会重复（领取是幂等的）。
+        // ⚠ 失败不影响签到结果 —— 这是**加分项**，不是签到的前置条件。
+        if (claim.ok) {
+          try {
+            const state = await fetchOnboarding(credential.session)
+            const { claimed, failed } = await claimAllTasks(credential.session, state.tasks)
+            onboardingCache.set(credential.session, { at: Date.now(), value: null })
+            if (claimed.length > 0) {
+              const gained = claimed.reduce((n, x) => n + x.points, 0)
+              log(`新手任务领到 ${claimed.length} 项（+${gained} 分）${failed.length ? `，${failed.length} 项失败` : ""}`)
+              result.message += ` · 新手任务 +${gained} 分`
+              clearUsageCache()
+            }
+          } catch (e) {
+            log(`新手任务领取跳过：${e?.message ?? e}`, "warn")
+          }
         }
         return result
       },
@@ -426,4 +470,6 @@ export const _internal = {
   readDesktopSession,
   claimDailyQuota,
   fetchBalances,
+  fetchOnboarding,
+  claimAllTasks,
 }

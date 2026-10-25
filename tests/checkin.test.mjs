@@ -180,3 +180,44 @@ test("静态表里两个 Spark 必须是 free=true（缓存/未登录时也要�
     assert.equal(m[id].free, false, `${id} 不该是 free`)
   }
 })
+
+// ── 新手任务（onboarding）───────────────────────────────────────────
+
+test("新手任务总池 10000，未完成的分值可累加", () => {
+  const { onboardingPoints, earnedPoints, normalizeTasks } = pure
+  const total = Object.values(onboardingPoints()).reduce((a, b) => a + b, 0)
+  assert.equal(total, 10000, "上游标称 1 万分")
+
+  const tasks = normalizeTasks({ first_message: true })
+  assert.equal(earnedPoints(tasks), 500)
+})
+
+test("未知 key 被丢掉、缺失的补 false（上游加任务时不会炸）", () => {
+  const tasks = pure.normalizeTasks({ first_message: true, some_new_task: true })
+  assert.equal(tasks.some_new_task, undefined)
+  assert.equal(tasks.share_soul, false)
+  assert.equal(tasks.first_message, true)
+})
+
+test("待办按分值从高到低排（先领大的）", () => {
+  const pending = pure.pendingTasks(pure.normalizeTasks({ first_message: true }))
+  assert.equal(pending[0].key, "share_soul")   // 2000
+  assert.equal(pending[0].points, 2000)
+  assert.ok(pending.length === 7, "8 项里完成 1 项 → 剩 7")
+  assert.ok(!pending.some((x) => x.key === "first_message"), "已完成的不能再出现在待办里")
+})
+
+test("新手任务窗口是 aside（一次性额度不该驱动路由）", () => {
+  const w = pure.onboardingWindow(pure.normalizeTasks({ first_message: true }), 10000)
+  assert.ok(w)
+  assert.equal(w.name, "新手任务")
+  assert.equal(w.aside, true, "一次性奖励不参与路由打分")
+  assert.equal("limit" in w, false, "不给 limit，避免被当成池子算占比")
+  assert.match(w.display, /9500/, "还剩 10000-500=9500")
+  assert.match(w.display, /7 项/)
+})
+
+test("任务全领完就不画这一格（不是画一个 0）", () => {
+  const all = Object.fromEntries(Object.keys(pure.onboardingPoints()).map((k) => [k, true]))
+  assert.equal(pure.onboardingWindow(pure.normalizeTasks(all), 10000), null)
+})

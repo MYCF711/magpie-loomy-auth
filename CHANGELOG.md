@@ -15,6 +15,8 @@
 - **256px 图标** —— 卡片上不再是糊的
 - **README 重写** —— 开头给数字、功能一条一行、安装放最后、参考源逐条列出
 - **新增 `CHANGELOG.md`**，并让推 tag 自动生成 GitHub Release
+- **仓库里的 `name` 改成 `Loomy`** —— 卡片标题就是包名（`plugins/package.json` 的依赖键由包内 `name` 决定），改这里才永久生效：`add` / `update` 不会再把它重置回 `magpie-plugin-loomy-auth`
+- **新增 `publish-npm.mjs`** —— npm 上的包名仍是 `magpie-plugin-loomy-auth`（registry 不接受含大写的新包名）；发布改用 `npm run publish:npm`，别再裸跑 `npm publish`
 
 ## 更早
 

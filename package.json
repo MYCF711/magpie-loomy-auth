@@ -1,5 +1,5 @@
 {
-  "name": "magpie-plugin-loomy-auth",
+  "name": "Loomy",
   "version": "0.1.14",
   "description": "Loomy (iFlytek) for magpie: desktop-session import / SMS / session sign-in, live model catalog with reasoning efforts, chat with tools and images, and the two credit pools reported as the host routes them — the daily pool counts, the permanent one is shown aside.",
   "type": "module",
@@ -13,7 +13,8 @@
     "CHANGELOG.md",
     "NOTICE.md",
     "LICENSE",
-    "assets"
+    "assets",
+    "publish-npm.mjs"
   ],
   "keywords": [
     "magpie",
@@ -34,7 +35,8 @@
     "node": "^22.19.0 || >=24.0.0"
   },
   "scripts": {
-    "test": "node --test tests/"
+    "test": "node --test tests/",
+    "publish:npm": "node publish-npm.mjs"
   },
   "magpie": {
     "icon": "https://raw.githubusercontent.com/MYCF711/magpie-loomy-auth/main/assets/icon.png",

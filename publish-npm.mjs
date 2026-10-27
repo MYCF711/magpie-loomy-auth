@@ -10,7 +10,7 @@
 // 包名，发完立刻还原 —— 仓库里永远留着好看的那个名字。
 //
 // ⚠ 从此不要裸跑 `npm publish`：那会拿 "Loomy" 去发，被 registry 拒绝。
-// ⚠ 机制说明见 magpie-plugin-template 的 UPDATING.md。
+// ⚠ 机制说明见 magpie-plugin-scaffold 的 UPDATING.md。
 
 import fs from "node:fs"
 import { fileURLToPath } from "node:url"

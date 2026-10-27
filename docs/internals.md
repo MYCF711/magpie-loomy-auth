@@ -304,8 +304,13 @@ cd ~/.config/magpie/plugins && ~/.cache/magpie/bun/1.4.4/magpie-bun.exe install
 magpie 的「有新版本」检查按**包名**去 npm 查，与仓库属主无关 —— 撞名会让界面提示
 一个**别人的**新版，点「更新」就把别人的包装进来顶掉本插件。加 `-plugin-` 段避开。
 
-⚠ **插件内 `REGISTRY_ENTRY.package` 必须与 `package.json` 的 `name` 一字不差**，
-否则自注册条目对不上市场卡片。
+⚠ **提交给 registry 的条目里 `package` 必须与 `package.json` 的 `name` 一字不差**
+（`magpie-plugin-loomy-auth`），否则市场卡片对不上这个包。
+
+⚠ 插件**不写** magpie 的市场缓存（`~/.cache/magpie/plugin-market.json`）——
+那份文件属于 magpie，插件每次加载都去 merge，等于把 registry 条目盖掉。
+0.1.14 及更早曾用 `src/self-register.mjs` 这么干，0.1.15 删除。
+卡片标题与文案的唯一载体是 registry 条目。
 
 ---
 

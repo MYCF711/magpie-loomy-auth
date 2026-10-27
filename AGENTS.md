@@ -8,6 +8,27 @@
 
 ---
 
+## 零、magpie 升级时：只看稳定版
+
+**判断「要不要跟着 magpie 改这个插件」看稳定渠道，不看每版本渠道。**
+magpie 设置里有「更新渠道：每个版本 / 稳定版」，用户默认跑后者，插件要跟的也是后者。
+
+```bash
+curl -s "https://usemagpie.ai/api/latest?channel=stable" | grep -o '"version":"[^"]*"'
+```
+
+实测（2026-10-28）：两档差 **400 多个版本**（每版本 0.1.1763 / 稳定版 0.1.1327），
+但把两边内嵌契约都提取出来逐字段比对后 —— **插件相关的字段一条不差**。
+多出来的段是 GUI 历史，不是插件契约。⇒ 追每版本几乎全是白跑。
+
+**稳定版版本号变了**，才需要重提取契约（脚手架的 `extract-contract.py`）→
+跑 `contract-diff.mjs` → 看差集里有没有「不写会关掉某个能力」的字段。
+完整判据见脚手架的
+[HOOKS.md](https://github.com/MYCF711/magpie-plugin-scaffold/blob/main/HOOKS.md) 顶部
+与 [UPDATING.md](https://github.com/MYCF711/magpie-plugin-scaffold/blob/main/UPDATING.md) 第七节。
+
+---
+
 ## 一、先定位你在哪一步
 
 | 你在做什么 | 必读（按顺序） | 做完的判据 |

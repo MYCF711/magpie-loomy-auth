@@ -78,8 +78,8 @@
       判据：返回 + magpie-plugin-loomy-auth@<版本>；package.json 的 name 已还原成 Loomy
 □ 第 6 步 · tag + Release
       命令：git tag v<version> && git push origin v<version>
-      本仓库**没有** .github/workflows ⇒ Release 手工建：
-        POST /repos/MYCF711/magpie-loomy-auth/releases
+      本仓库**有** .github/workflows/release.yml ⇒ 推 tag 后 workflow 自动建，不用手工 POST
+      判据：约 1 分钟后 GET /releases/tags/v<version> 为 200
 □ 第 7 步 · 四条验证
       ① npm view magpie-plugin-loomy-auth version
       ② 下载 dist.tarball 解包看内容（不只看版本号）

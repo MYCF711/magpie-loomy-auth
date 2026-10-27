@@ -3,6 +3,10 @@
 > 每个版本一节，**一条一行**，说用户能感知的变化。
 > 格式与发布流程见 [magpie-plugin-scaffold](https://github.com/MYCF711/magpie-plugin-scaffold) 的 [UPDATING.md](https://github.com/MYCF711/magpie-plugin-scaffold/blob/main/UPDATING.md)。
 
+## 0.1.18 — 2026-10-28
+
+- **修正文档里的错误说法**：AGENTS 与 CHECKLIST 都写着「本仓库没有 .github/workflows ⇒ Release 手工建」，实际本仓库**有** `release.yml` —— 推 tag 后 workflow 自动建 Release。上一版发布时 `release.mjs` 打出「交给 release.yml」才暴露出来
+
 ## 0.1.17 — 2026-10-28
 
 - **AGENTS 新增「零、magpie 升级时：只看稳定版」** —— magpie 有「更新渠道：每个版本 / 稳定版」，用户默认跑稳定版。两渠道实测差 **400 多个版本**（每版本 0.1.1763 / 稳定版 0.1.1327），但插件相关的契约字段**一条不差** ⇒ 追每版本几乎全是白跑。判断依据只有一条：**稳定版版本号变了**才需要重新同步

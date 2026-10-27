@@ -82,9 +82,9 @@ npm pack --dry-run
 # 发布（包内 name 是 Loomy，npm 包名是 magpie-plugin-loomy-auth）
 npm run publish:npm
 
-# Release（本仓库没有 .github/workflows，手工建）
+# Release：本仓库有 release.yml，推 tag 后 workflow 自动建（不用手工 POST）
 git tag v0.1.16 && git push origin v0.1.16
-#   然后 POST /repos/MYCF711/magpie-loomy-auth/releases
+#   （workflow 会自动建 Release；约 1 分钟后查 /releases/tags/v<version>）
 ```
 
 ---

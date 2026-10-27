@@ -3,6 +3,12 @@
 > 每个版本一节，**一条一行**，说用户能感知的变化。
 > 格式与发布流程见 [magpie-plugin-template](https://github.com/MYCF711/magpie-plugin-template) 的 [UPDATING.md](https://github.com/MYCF711/magpie-plugin-template/blob/main/UPDATING.md)。
 
+## 0.1.15 — 2026-10-27
+
+- **插件不再写 magpie 自己的缓存** —— 删掉 `src/self-register.mjs` 与 index 里的调用：`~/.cache/magpie/plugin-market.json` 属于 magpie，每次加载都去改它等于把 registry 条目盖掉
+- **卡片标题与文案改由 registry 条目承担** —— 提交到 `magpie-community/plugins` 的条目是唯一受支持的做法
+- 其余行为（登录、模型、积分、签到）**一行未动**，凭据形状不变，不用重新登录
+
 ## 0.1.14 — 2026-10-26
 
 首次留档。0.1.5–0.1.13 是同一天的连续迭代，没有分开记 —— 下面这些是这个插件**现在**

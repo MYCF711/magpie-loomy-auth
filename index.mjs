@@ -73,22 +73,10 @@ import { readDesktopSession, readAllLoomySessions, readAllLoomyAccounts } from "
 import { staticModels, liveModels } from "./src/models.mjs"
 import { readUsage, publicUsage, quotaToRemember, clearUsageCache } from "./src/usage.mjs"
 import { chatFetch } from "./src/chat.mjs"
-import { startSelfRegister } from "./src/self-register.mjs"
 
 const API_URL = `${INTEGRATION_BASE}/api/v1`
 
-const REGISTRY_ENTRY = {
-  package: "magpie-plugin-loomy-auth",
-  name: PROVIDER_NAME,
-  providers: [PROVIDER],
-  community: true,
-  summary: {
-    en: "Loomy (iFlytek) coding subscription for magpie: desktop-session import / SMS / session sign-in, live model catalog with reasoning efforts, chat with tool calling and images, and the two credit pools (daily + permanent) reported as the host routes them — the daily pool counts, the permanent one is shown aside.",
-    zh: "讯飞 Loomy 编程订阅：桌面端登录态导入 / 短信 / 粘贴 session 三种登录，实时模型目录与思考档位，工具调用与图片对话，以及分池上报的积分（今日池参与路由、永久池仅展示）—— 修掉「退化账号显示剩余 100%」这类占比缺陷。",
-  },
-}
-
-export const LoomyAuthPlugin = async ({ client, directory } = {}) => {
+export const LoomyAuthPlugin = async ({ client } = {}) => {
   const log = (message, level = "info") => {
     try {
       client?.app?.log?.({ service: "loomy", level, message })
@@ -97,8 +85,8 @@ export const LoomyAuthPlugin = async ({ client, directory } = {}) => {
     }
   }
 
-  // 自注册：写一次就够（magpie 静默时不碰市场缓存，实测 3 分钟零变化）
-  startSelfRegister(REGISTRY_ENTRY, { configDir: directory, log })
+  // 卡片标题与文案不在这里做 —— 那是 registry 条目的职责（registry-entry.json）。
+  // 插件不写 magpie 自己的缓存目录：那份文件属于 magpie，插件只读不写。
 
   // 目录进程内缓存：session -> { at, models }
   const catalog = new Map()

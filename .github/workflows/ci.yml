@@ -1,0 +1,34 @@
+name: check
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  rules:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: plugin
+      - uses: actions/checkout@v4
+        with:
+          repository: MYCF711/magpie-plugin-scaffold
+          path: scaffold
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: 供应商插件规定
+        working-directory: plugin
+        run: node ../scaffold/scripts/check.mjs .
+      - name: 语义测试
+        working-directory: plugin
+        run: node --test tests/*.test.mjs
+      - name: 打包面预演
+        working-directory: plugin
+        run: npm pack --dry-run

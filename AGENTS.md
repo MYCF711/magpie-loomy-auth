@@ -41,7 +41,7 @@ curl -s "https://usemagpie.ai/api/latest?channel=stable" | grep -o '"version":"[
 | **代码写完，准备交付** | [CHECKLIST.md](./CHECKLIST.md) 的 **A 表** | A 表全勾 + check 脚本退出 0 |
 | **要发版本** | [UPDATING.md](https://github.com/MYCF711/magpie-plugin-scaffold/blob/main/UPDATING.md)（七步） | CHECKLIST B 表全勾 + 四条验证 |
 
-**最容易漏的是最后一行。** `git push` 只是七步里的第 4 步。
+**最容易漏的是最后一行。** 禁止直接推 main；只能推功能分支，PR 的 `rules` 全绿并合并后才发布。
 
 ---
 

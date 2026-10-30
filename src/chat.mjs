@@ -93,14 +93,15 @@ export async function chatFetch({ input, init, credential, session, usageValue }
     }
   }
 
-  // ⑤ 上游用 400 说「内容太长了」，但文案里一个「上下文」都没有 ——
-  //    magpie 的 `tooLongRe`（internal/gateway/gateway.go）中文只认
-  //    `上下文(长度)?(超|过长)` 与 `超(过|出)(了)?(模型)?(的)?(最大)?上下文`，
-  //    这条漏网 ⇒ `overflowed()` 为假 ⇒ 该 try 被当普通错误、账号被冻结、
-  //    组里其它成员一次没被问，整轮会话直接失败（请求日志实测 2026-10-30）。
+  // ⑤ 上游用 400 说「内容太长了」，但**它并不总是真的超长**（实测 2026-10-30）：
+  //    同一天里 838,400 token 的请求成功，373,924 token 的却被这样拒绝；
+  //    同一时段还有 `429 模型服务当前繁忙` —— 这条 400 更像过载时的通用文案。
   //
-  //    这里把文案换成它认得的说法，状态码与其余字段原样。
-  const tooLong = await rewriteTooLongRefusal(response)
+  //    所以按**请求体大小**分流，而不是一律当长度问题：
+  //      · 请求体远小于模型声明上限 ⇒ 不是长度问题 ⇒ 502（magpie 换号重试，几秒钟）
+  //      · 请求体确实很大        ⇒ 真是长度问题 ⇒ 改写成 `tooLongRe` 认得的中文写法
+  //        （magpie 据此让 agent 压缩上下文，而不是整轮失败）
+  const tooLong = await rewriteTooLongRefusal(response, bodyText.length)
   if (tooLong) return tooLong
 
   return response
@@ -112,12 +113,23 @@ const TOO_LONG_SAID = /内容太长(了)?|内容过长/
 const TOO_LONG_REWORDED = "上下文超出长度限制"
 
 /**
- * 把「内容太长了」的 400/413/422 改写成 magpie 认得的文案，其余原样。
+ * 请求体小于这个字符数，就不可能是「超过模型上限」。
+ *
+ * 判据（2026-10-30 实测）：Loomy 的 DeepSeek-V4.1-Flash 声明 1,048,576 token，
+ * 而 **838,400 token 的请求是成功的**；按 2~4 字符/token 折算约 200~330 万字符。
+ * 取 200 万字符作界，落在它下面的一律当「上游瞬时错误」而不是长度问题。
+ */
+const NOT_TOO_LONG_MAX_CHARS = 2_000_000
+
+/**
+ * 处理「内容太长了」的 400/413/422：
+ *   · 请求体不大 → 502（让 magpie 换号重试）
+ *   · 请求体确实大 → 改写成 `tooLongRe` 认得的中文写法，状态码不变
  *
  * ⚠ 只读 400/413/422 的响应体（错误响应很小），其它状态码连 clone 都不做。
- * ⚠ 只换那一句文案；JSON 结构、其它字段、状态码全部保留。解析/读取失败一律原样返回。
+ * ⚠ 只换那一句文案；JSON 结构、其它字段、状态码保留。解析/读取失败一律原样返回。
  */
-async function rewriteTooLongRefusal(response) {
+async function rewriteTooLongRefusal(response, requestChars = 0) {
   const status = response?.status
   if (status !== 400 && status !== 413 && status !== 422) return null
   let text
@@ -128,15 +140,19 @@ async function rewriteTooLongRefusal(response) {
     return null
   }
   if (!TOO_LONG_SAID.test(text)) return null
-  const rewritten = text.replace(TOO_LONG_SAID, TOO_LONG_REWORDED)
-  if (rewritten === text) return null
+
+  // 请求体远小于上限 ⇒ 这不是长度问题，是上游的瞬时错误（过载时它就这么说）
+  const momentary = requestChars > 0 && requestChars < NOT_TOO_LONG_MAX_CHARS
+  const rewritten = momentary ? text : text.replace(TOO_LONG_SAID, TOO_LONG_REWORDED)
+  const outStatus = momentary ? 502 : status
   const headers = new Headers(response.headers)
   // body 长度变了，原来的长度/编码头不再成立
   headers.delete("content-length")
   headers.delete("content-encoding")
-  // 排障用：上游原本是几（magpie 会把响应头透给客户端）
+  // 排障用：上游原本是几、我们判成了什么
   headers.set("x-loomy-vendor-status", String(status))
-  return new Response(rewritten, { status, statusText: response.statusText, headers })
+  if (momentary) headers.set("x-loomy-classified", "momentary")
+  return new Response(rewritten, { status: outStatus, statusText: response.statusText, headers })
 }
 
 function jsonResponse(status, payload) {

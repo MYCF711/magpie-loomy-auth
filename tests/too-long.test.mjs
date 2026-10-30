@@ -99,3 +99,32 @@ test("只说「内容过长」的变体同样命中", async () => {
   assert.ok(out)
   assert.match(await out.text(), MAGPIE_TOO_LONG_ZH)
 })
+// ── 分流：请求体大小决定这是「真超长」还是「上游瞬时错误」 ──────────────────
+//
+// 判据（2026-10-30 实测）：同一天里 838,400 token 的请求成功、373,924 token 的
+// 被说「内容太长」，同时段还有 429「模型服务当前繁忙」。所以请求体远小于声明
+// 上限时，这条 400 不是长度问题 —— 应当换号重试，而不是让 agent 白白压缩上下文。
+
+test("请求体远小于上限时判为瞬时错误 → 502（换号），文案不改", async () => {
+  const res = jsonResponse(400, { error: { message: VENDOR_TEXT } })
+  const out = await rewriteTooLongRefusal(res, 150_000)
+  assert.ok(out, "仍要拦下来，不能原样交给客户端")
+  assert.equal(out.status, 502, "换号重试，而不是让 agent 压缩")
+  assert.equal(out.headers.get("x-loomy-classified"), "momentary")
+  assert.match(await out.text(), /内容太长/, "瞬时错误保留上游原话，便于排障")
+})
+
+test("请求体接近上限时才当长度问题 → 保持 400 并改写成 tooLongRe 认得的样子", async () => {
+  const res = jsonResponse(400, { error: { message: VENDOR_TEXT } })
+  const out = await rewriteTooLongRefusal(res, 3_000_000)
+  assert.ok(out)
+  assert.equal(out.status, 400, "真长度问题不改状态码")
+  assert.equal(out.headers.get("x-loomy-classified"), null)
+  assert.match(await out.text(), MAGPIE_TOO_LONG_ZH)
+})
+
+test("边界：恰好 200 万字符仍按「真长度问题」处理", async () => {
+  const out = await rewriteTooLongRefusal(jsonResponse(400, { error: { message: VENDOR_TEXT } }), 2_000_000)
+  assert.equal(out.status, 400)
+  assert.match(await out.text(), MAGPIE_TOO_LONG_ZH)
+})

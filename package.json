@@ -1,6 +1,6 @@
 {
   "name": "Loomy",
-  "version": "0.1.18",
+  "version": "0.1.19",
   "description": "Loomy (iFlytek) for magpie: desktop-session import / SMS / session sign-in, live model catalog with reasoning efforts, chat with tools and images, and the two credit pools reported as the host routes them — the daily pool counts, the permanent one is shown aside.",
   "type": "module",
   "main": "./index.mjs",
@@ -39,7 +39,7 @@
     "node": "^22.19.0 || >=24.0.0"
   },
   "scripts": {
-    "test": "node --test tests/",
+    "test": "node --test tests/*.test.mjs",
     "publish:npm": "node publish-npm.mjs"
   },
   "magpie": {

@@ -3,6 +3,11 @@
 > 每个版本一节，**一条一行**，说用户能感知的变化。
 > 格式与发布流程见 [magpie-plugin-scaffold](https://github.com/MYCF711/magpie-plugin-scaffold) 的 [UPDATING.md](https://github.com/MYCF711/magpie-plugin-scaffold/blob/main/UPDATING.md)。
 
+## 0.1.19 — 2026-10-30
+
+- **「内容太长了」不再整轮失败**：上游回 `400 内容太长了，请精简输入或开启新对话`，而 magpie 的 `tooLongRe` 中文只认 `上下文(长度)?(超|过长)` 与 `超(过|出)…上下文` —— 一个「上下文」都没有，于是被当普通错误冻结账号、组里其它成员一次没被问、整轮会话直接失败。现在在 `chatFetch` 里把这句话改写成 `上下文超出长度限制`，其余字段与状态码原样，magpie 据此判定「该压缩上下文」而不是失败
+- **`npm test` 在 Node 24 上跑不起来**：`node --test tests/` 会把目录当模块路径解析 ⇒ `MODULE_NOT_FOUND`。改成 `node --test tests/*.test.mjs`（68 条全过）
+
 ## 0.1.18 — 2026-10-28
 
 - **修正文档里的错误说法**：AGENTS 与 CHECKLIST 都写着「本仓库没有 .github/workflows ⇒ Release 手工建」，实际本仓库**有** `release.yml` —— 推 tag 后 workflow 自动建 Release。上一版发布时 `release.mjs` 打出「交给 release.yml」才暴露出来

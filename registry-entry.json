@@ -1,7 +1,9 @@
 {
   "package": "magpie-plugin-loomy-auth",
-  "name": "Loomy",
-  "providers": ["loomy"],
+  "name": "讯飞 Loomy",
+  "providers": [
+    "loomy"
+  ],
   "summary": {
     "en": "Loomy (iFlytek) coding subscription: desktop-session import / SMS / pasted session sign-in, live model catalog with reasoning efforts, chat with tool calling and images, and the two credit pools (daily + permanent) reported as the host routes them.",
     "zh": "讯飞 Loomy 编程订阅：桌面端登录态导入 / 短信 / 粘贴 session 三种登录，实时模型目录与思考档位，工具调用与图片对话，积分按今日池 / 永久池分开上报。"

@@ -1,6 +1,6 @@
 {
-  "name": "讯飞 Loomy",
-  "version": "0.1.20",
+  "name": "magpie-plugin-loomy-auth",
+  "version": "0.1.21",
   "description": "讯飞 Loomy (iFlytek) for magpie: desktop-session import / SMS / session sign-in, live model catalog with reasoning efforts, chat with tools and images, and the two credit pools reported as the host routes them — the daily pool counts, the permanent one is shown aside.",
   "type": "module",
   "main": "./index.mjs",
@@ -44,7 +44,8 @@
   },
   "magpie": {
     "icon": "https://raw.githubusercontent.com/MYCF711/magpie-loomy-auth/main/assets/icon.png",
-    "maxConcurrency": 4
+    "maxConcurrency": 4,
+    "name": "讯飞 Loomy"
   },
   "bugs": {
     "url": "https://github.com/MYCF711/magpie-loomy-auth/issues"

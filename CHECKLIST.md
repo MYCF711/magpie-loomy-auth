@@ -75,7 +75,7 @@
 □ 第 3 步 · 提交并推功能分支（不是 main）
 □ 第 4 步 · PR 的 rules 全绿后合并（禁止直接推 main）
 □ 第 5 步 · npm run publish:npm
-      判据：返回 + magpie-plugin-loomy-auth@<版本>；package.json 的 name 已还原成 Loomy
+      判据：返回 + magpie-plugin-loomy-auth@<版本>；package.json 的 name 保持 ASCII slug，显示名在 magpie.name
 □ 第 6 步 · tag + Release
       命令：git tag v<version> && git push origin v<version>
       本仓库**有** .github/workflows/release.yml ⇒ 推 tag 后 workflow 自动建，不用手工 POST

@@ -50,8 +50,8 @@
       判据：src 里搜不到 plugin-market.json
       出处：internals 从本地 tgz 安装
 
-□ 11. registry-entry.json 的 package 与 package.json 的 name 一字不差
-      判据：都是 Loomy（npm 包名是另一回事：magpie-plugin-loomy-auth）
+□ 11. registry-entry.json 的 package 与 **npm 包名**一字不差
+      判据：package 是 magpie-plugin-loomy-auth；name 是市场显示名「讯飞 Loomy」
       出处：同上
 
 □ 12. node tests/semantics.test.mjs 全绿

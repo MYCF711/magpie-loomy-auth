@@ -1,4 +1,4 @@
-# Loomy for magpie
+# 讯飞 Loomy for magpie
 
 **每个账号 25,000 一次性永久积分 + 每天 5,000 积分**
 
@@ -56,7 +56,7 @@ magpie 每天调一次，一次做完三件事：刷新今日额度、领新手�
 
 ## 安装
 
-在 magpie 的 **插件 → 发现** 搜 `Loomy`，点**安装**。
+在 magpie 的 **插件 → 发现** 搜 `讯飞 Loomy`，点**安装**。
 
 先卸掉别的 Loomy 插件 —— 会抢同一个供应商。
 
@@ -86,7 +86,7 @@ cd ~/.config/magpie/plugins && ~/.cache/magpie/bun/1.4.4/magpie-bun.exe install
 ```bash
 magpie plugin list
 # magpie-plugin-loomy-auth  on
-#   loomy (Loomy, 10 models)  signed in as 189****8051
+#   loomy (讯飞 Loomy, 10 models)  signed in as 189****8051
 ```
 
 ⚠ 改了代码要 **bump `version` 再打包** —— 同一版本号重打，bun 会命中缓存（输出 `no changes`）。

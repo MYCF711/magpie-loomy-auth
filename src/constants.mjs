@@ -7,7 +7,7 @@
 export { ICON } from "./icon.mjs"
 
 export const PROVIDER = "loomy"
-export const PROVIDER_NAME = "Loomy"
+export const PROVIDER_NAME = "讯飞 Loomy"
 
 export const INTEGRATION_BASE = trim(process.env.LOOMY_POINTS_BASE_URL) || "https://loomyad.xunfei.cn"
 export const XFYUN_ACCOUNT_BASE =

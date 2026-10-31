@@ -80,7 +80,7 @@ node tests/semantics.test.mjs
 # 打包面预演
 npm pack --dry-run
 
-# 发布（包内 name 是 讯飞 Loomy，npm 包名是 magpie-plugin-loomy-auth）
+# 发布（包内 name 是 ASCII slug magpie-plugin-loomy-auth；显示名在 magpie.name）
 npm run publish:npm
 
 # Release：本仓库有 release.yml，推 tag 后 workflow 自动建（不用手工 POST）

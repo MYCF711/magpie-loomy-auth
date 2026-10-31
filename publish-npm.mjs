@@ -9,7 +9,7 @@
 // letters），而卡片标题想要供应商自己的写法。所以发布这一下把 name 换成 npm 上的
 // 包名，发完立刻还原 —— 仓库里永远留着好看的那个名字。
 //
-// ⚠ 从此不要裸跑 `npm publish`：那会拿 "Loomy" 去发，被 registry 拒绝。
+// ⚠ 从此不要裸跑 `npm publish`：那会拿 "讯飞 Loomy" 去发，被 registry 拒绝。
 // ⚠ 机制说明见 magpie-plugin-scaffold 的 UPDATING.md。
 
 import fs from "node:fs"

@@ -1,16 +1,15 @@
 // 发布到 npm 的包装器 —— 用 `npm run publish:npm`。
 //
-// package.json 的 name 现在是 ASCII slug（magpie-plugin-loomy-auth），也就是 npm 包名；
-// 卡片标题改用 magpie.name（讯飞 Loomy）。所以发布时不需要再临时换 name。
+// package.json 的 name 是 ASCII slug（= npm 包名）；卡片标题在 magpie.name。
+// 发布时不需要换 name；只有在 name 与 PUBLISH_AS 不一致的旧分支上才临时换，发完恢复。
 //
-// 保留这个包装器是为了旧分支/旧文档仍走同一条命令；它只在 name 与 PUBLISH_AS
-// 不一致时才临时换名，发布后无论成败都恢复。
+// CI=true 时，npm 报「同版本已存在」（E409 / previously staged）按成功处理：
+// 本地 release 已发过同一版，tag 触发的 workflow 不该因此变红。
 
 import fs from "node:fs"
 import { fileURLToPath } from "node:url"
-import { execSync } from "node:child_process"
+import { spawnSync } from "node:child_process"
 
-/** npm 上的包名。与仓库里的 name 相同是正常的。 */
 const PUBLISH_AS = "magpie-plugin-loomy-auth"
 
 const FILE = fileURLToPath(new URL("./package.json", import.meta.url))
@@ -24,7 +23,22 @@ if (renamed) {
 }
 
 try {
-  execSync(process.argv[2] || "npm publish --access public", { stdio: "inherit" })
+  const r = spawnSync(process.argv[2] || "npm publish --access public", {
+    shell: true,
+    encoding: "utf8",
+  })
+  if (r.stdout) process.stdout.write(r.stdout)
+  if (r.stderr) process.stderr.write(r.stderr)
+  if (r.status !== 0) {
+    const text = `${r.stdout ?? ""}${r.stderr ?? ""}`
+    if (process.env.CI === "true" && /E409|previously staged|EPUBLISHCONFLICT|cannot publish over/i.test(text)) {
+      console.warn(`\n! npm 已有 ${PUBLISH_AS}@${pkg.version}，按已发布处理（CI）\n`)
+      process.exitCode = 0
+    } else {
+      console.error(`\n✗ npm 发布失败：${PUBLISH_AS}@${pkg.version}\n`)
+      process.exitCode = 1
+    }
+  }
 } finally {
   if (renamed) {
     fs.writeFileSync(FILE, orig)

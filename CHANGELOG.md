@@ -3,6 +3,11 @@
 > 每个版本一节，**一条一行**，说用户能感知的变化。
 > 格式与发布流程见 [magpie-plugin-scaffold](https://github.com/MYCF711/magpie-plugin-scaffold) 的 [UPDATING.md](https://github.com/MYCF711/magpie-plugin-scaffold/blob/main/UPDATING.md)。
 
+## 0.1.20 — 2026-10-31
+
+- **卡片显示名改为「讯飞 Loomy」**：按新约定写成 `<中文> <English>`，英文部分照厂商官方写法 `Loomy`；provider 的 `name` 同步改，市场条目的 `name` 也同步。官方站点（https://loomy.xunfei.cn/）的标题与 description 只写「Loomy」，中文部分是厂商名「讯飞」，没有独立中文产品名
+- **npm 包名仍是 `magpie-plugin-loomy-auth`**：`publish:npm` 在发布瞬间注入，仓库里的 `name` 只负责显示
+
 ## 0.1.19 — 2026-10-30
 
 - **「内容太长了」不再整轮失败**：上游回 `400 内容太长了，请精简输入或开启新对话`，而 magpie 的 `tooLongRe` 中文只认 `上下文(长度)?(超|过长)` 与 `超(过|出)…上下文` —— 一个「上下文」都没有，于是被当普通错误冻结账号、组里其它成员一次没被问、整轮会话直接失败。现在在 `chatFetch` 里把这句话改写成 `上下文超出长度限制`，其余字段与状态码原样，magpie 据此判定「该压缩上下文」而不是失败

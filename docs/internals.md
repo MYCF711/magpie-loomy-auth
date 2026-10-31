@@ -11,7 +11,7 @@ Loomy（讯飞）做成 magpie 供应商插件：**桌面端登录态导入 / �
 
 ```
 magpie-plugin-loomy-auth  on
-  loomy (Loomy, 10 models)  signed in as 189****8051
+  loomy (讯飞 Loomy, 10 models)  signed in as 189****8051
 ```
 
 ---

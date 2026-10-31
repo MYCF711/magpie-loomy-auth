@@ -1,29 +1,22 @@
 name: release
 
-# 推一个 v* tag，就把 CHANGELOG.md 里该版本那几条抽出来，建成 GitHub Release。
-#
-# 为什么要有这个：Release 的正文就是「更新内容，一条条列出来」——
-# 手工复制迟早会漏，而正文与 CHANGELOG 分家就会互相打架。
-# 机制见 UPDATING.md；这里只做一件事：CHANGELOG 是唯一来源，Release 是它的投影。
-#
-# ⚠ 这个 workflow 不参与 magpie 的更新检测（那是 push 默认分支 + npm publish 的事）。
-#   Release 是给人看的。
+# 推 v* tag 后：核对版本/祖先 → 测试 → 建/刷新 Release → 发布 npm。
+# CHANGELOG 是 Release 正文的唯一来源；npm 已发过同一版时跳过。
 
 on:
   push:
     tags:
       - "v*"
-  # 想刷新已发版本的 Release 正文，就在 Actions 页面手动跑一次 ——
-  # 别用「删 tag 再重推」：GitHub 删 tag 时会把它的 Release 转成草稿（网页上就看不见了）。
   workflow_dispatch:
     inputs:
       tag:
-        description: 要刷新的 tag，例如 v0.1.3
+        description: 要重新生成正文的已有 tag，例如 v0.1.21
         required: true
         type: string
 
 permissions:
   contents: write
+  id-token: write
 
 jobs:
   verify:
@@ -33,29 +26,34 @@ jobs:
         with:
           ref: ${{ inputs.tag || github.ref }}
           fetch-depth: 0
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: 只允许发布已合并且验证通过的提交
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+
+      - name: tag 必须对应 package.json，且提交已合进默认分支
         env:
           REF_NAME: ${{ inputs.tag || github.ref_name }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           set -euo pipefail
           expected="v$(node -p "require('./package.json').version")"
-          test "$REF_NAME" = "$expected"
-          git fetch origin "$DEFAULT_BRANCH" --quiet
-          git merge-base --is-ancestor HEAD "origin/$DEFAULT_BRANCH"
-          if node -e "process.exit(require('./package.json').scripts?.test ? 0 : 1)"; then
-            npm test
-          elif compgen -G 'tests/*.test.mjs' > /dev/null; then
-            node --test tests/*.test.mjs
-          elif [ -f tests/smoke.mjs ]; then
-            node tests/smoke.mjs
-          else
-            echo "没有可自动运行的语义测试" >&2
+          if [ "$REF_NAME" != "$expected" ]; then
+            echo "tag $REF_NAME 与 package.json 的版本 $expected 不一致" >&2
             exit 1
           fi
+          git fetch origin "$DEFAULT_BRANCH" --quiet
+          if ! git merge-base --is-ancestor HEAD "origin/$DEFAULT_BRANCH"; then
+            echo "这个 tag 的提交尚未合进 $DEFAULT_BRANCH，拒绝发布" >&2
+            exit 1
+          fi
+
+      - name: 发布前测试与打包清单
+        run: |
+          set -euo pipefail
+          npm test
           npm pack --dry-run
 
   release:
@@ -72,14 +70,10 @@ jobs:
         run: |
           set -euo pipefail
           ver="${REF_NAME#v}"
-
           if [ ! -f CHANGELOG.md ]; then
-            echo "没有 CHANGELOG.md —— Release 正文留空" >&2
-            printf '见仓库根目录的 CHANGELOG.md。\n' > notes.md
-            exit 0
+            echo "没有 CHANGELOG.md，拒绝建空 Release" >&2
+            exit 1
           fi
-
-          # 取 "## <ver>" 那一节，到下一个 "## " 之前；去掉空行
           awk -v ver="$ver" '
             /^## / {
               if (f) exit
@@ -87,30 +81,60 @@ jobs:
             }
             f { print }
           ' CHANGELOG.md | sed '/^[[:space:]]*$/d' > notes.md
-
           if [ ! -s notes.md ]; then
-            echo "CHANGELOG.md 里没有 $ver 这一节" >&2
-            printf '见仓库根目录的 CHANGELOG.md。\n' > notes.md
+            echo "CHANGELOG.md 里没有 $ver 这一节，拒绝建空 Release" >&2
+            exit 1
           fi
-
-          echo "--- Release 正文 ---"
-          cat notes.md
 
       - name: 建 Release（已存在则刷新正文）
         env:
           GH_TOKEN: ${{ github.token }}
+          REF_NAME: ${{ inputs.tag || github.ref_name }}
         run: |
           set -euo pipefail
-          # 重推同一个 tag 时刷新，而不是报错 —— CHANGELOG 改了，Release 就跟着改
-          # ⚠ --draft=false 是必需的：tag 被删过的话，GitHub 会把 Release 转成草稿，
-          #   而 `gh release view` 看得见草稿 —— 于是走 edit 分支，草稿就一直是草稿。
-          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            gh release edit "$GITHUB_REF_NAME" \
-              --title "$GITHUB_REF_NAME" \
-              --notes-file notes.md \
-              --draft=false
+          if gh release view "$REF_NAME" >/dev/null 2>&1; then
+            gh release edit "$REF_NAME" --title "$REF_NAME" --notes-file notes.md --draft=false
           else
-            gh release create "$GITHUB_REF_NAME" \
-              --title "$GITHUB_REF_NAME" \
-              --notes-file notes.md
+            gh release create "$REF_NAME" --title "$REF_NAME" --notes-file notes.md
+          fi
+
+  npm:
+    runs-on: ubuntu-latest
+    needs: release
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+      - name: Publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "$NODE_AUTH_TOKEN" ]; then
+            echo "::error title=NPM_TOKEN 未配置::在仓库 Settings → Secrets and variables → Actions 加 NPM_TOKEN"
+            exit 1
+          fi
+          VERSION=$(node -p "require('./package.json').version")
+          NPM_NAME=$(node -p "require('./package.json').name")
+          # 本地发布可能已经发过同一版；tag 推上来后 CI 再发会 E409。
+          if npm view "$NPM_NAME@$VERSION" version >/dev/null 2>&1; then
+            echo "::warning title=npm 版本已存在::$NPM_NAME@$VERSION 已在 npm；跳过重复发布"
+            exit 0
+          fi
+          set +e
+          npm run publish:npm
+          code=$?
+          set -e
+          if [ "$code" -ne 0 ]; then
+            sleep 5
+            if npm view "$NPM_NAME@$VERSION" version >/dev/null 2>&1; then
+              echo "::warning title=npm 版本已存在::$NPM_NAME@$VERSION 已发布；按成功处理"
+              exit 0
+            fi
+            exit "$code"
           fi

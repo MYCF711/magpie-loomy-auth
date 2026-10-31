@@ -3,6 +3,10 @@
 > 每个版本一节，**一条一行**，说用户能感知的变化。
 > 格式与发布流程见 [magpie-plugin-scaffold](https://github.com/MYCF711/magpie-plugin-scaffold) 的 [UPDATING.md](https://github.com/MYCF711/magpie-plugin-scaffold/blob/main/UPDATING.md)。
 
+## 0.1.21 — 2026-10-31
+
+- **显示名迁移到 `magpie.name`**：`package.json` 的 `name` 改回 ASCII slug `magpie-plugin-loomy-auth`（bun 依赖键，避免 `plugin update` 报 `unrecognised dependency format`）；卡片标题由 `magpie.name: "讯飞 Loomy"` 提供（magpie 0.1.2404 的 `magpie.name` 修复）
+- provider 名保持 `讯飞 Loomy`；`registry-entry.json` 的 `name` 同步，`package` 仍是 npm 包名
 ## 0.1.20 — 2026-10-31
 
 - **卡片显示名改为「讯飞 Loomy」**：按新约定写成 `<中文> <English>`，英文部分照厂商官方写法 `Loomy`；provider 的 `name` 同步改，市场条目的 `name` 也同步。官方站点（https://loomy.xunfei.cn/）的标题与 description 只写「Loomy」，中文部分是厂商名「讯飞」，没有独立中文产品名

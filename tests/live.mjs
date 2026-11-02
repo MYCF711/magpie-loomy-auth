@@ -12,7 +12,7 @@ import { LoomyAuthPlugin, _internal } from "../index.mjs"
 
 const { pure, publicUsage, readUsage } = _internal
 
-const AUTH_FILE = process.env.LOOMY_AUTH_FILE || "C:/Users/Administrator/.config/magpie/plugin-auth.json"
+const AUTH_FILE = process.env.LOOMY_AUTH_FILE || "C:\Users\<user>/.config/magpie/plugin-auth.json"
 
 const LEGAL = ["claimed", "done", "ineligible", "inactive", "captcha", "failed"]
 

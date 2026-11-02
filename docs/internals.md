@@ -244,10 +244,10 @@ node tests/live.mjs       # 真实账号 + 真实上游（只读 + 幂等签到�
 `tests/live.mjs` 在真账号上的当前输出（2026-10-26）：
 
 ```
-=== loomy  13800138000
+=== loomy  <PHONE>
     balance=8979 积分  used=30.42%  limit=5000  永久池 aside
     checkin → {"outcome":"done","message":"今日额度已刷新（3479/5000 积分）"}
-=== loomy#0zloqw  13800138000
+=== loomy#0zloqw  <PHONE>
     balance=0 积分  used=100  ← 参与路由，会让这个号沉底
     checkin → {"outcome":"done",...}
 ✅ 全部通过

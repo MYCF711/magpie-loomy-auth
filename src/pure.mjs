@@ -68,9 +68,6 @@ export const _pure = {
   parseModels,
   modelShape,
 
-  prefersTagFormat,
-  rewriteImagesToTags,
-
   buildEscapedPath,
   signedHeaders,
 
@@ -478,58 +475,6 @@ function modelShape(m, base = {}) {
   //   **不要**在这里按「有没有 rate」反推 —— 那样 `x0.0` 会被误判成收费。
   shape.free = m.free === true
   return shape
-}
-
-// ════════════════════════════════════════════════════════════════════
-// ⑥ 图片格式适配
-// ════════════════════════════════════════════════════════════════════
-
-/**
- * deepseek 系模型只认 `<image_base64>` 标记；喂标准 `image_url` data URI
- * 会被上游当成截断的 base64 文本读（agent2api loomy/images.rs 的实测结论）。
- * 宁可不转，不能转错 —— 非 deepseek 一律不动。
- */
-function prefersTagFormat(modelId) {
-  return String(modelId ?? "").toLowerCase().includes("deepseek")
-}
-
-function tagOfBlock(block) {
-  if (!block || block.type !== "image_url") return null
-  const url = block?.image_url?.url
-  if (typeof url !== "string" || !url.startsWith("data:")) return null
-  const comma = url.indexOf(",")
-  if (comma < 0) return null
-  return `<image_base64>${url.slice(comma + 1)}</image_base64>`
-}
-
-/** 把 image 块并入相邻 text 块（上游实测认可的形态）。 */
-function rewriteImagesToTags(body) {
-  const messages = Array.isArray(body?.messages) ? body.messages : null
-  if (!messages) return body
-  const convertible = messages.some(
-    (msg) => Array.isArray(msg?.content) && msg.content.some((b) => tagOfBlock(b) !== null),
-  )
-  if (!convertible) return body
-
-  const next = JSON.parse(JSON.stringify(body))
-  for (const message of next.messages) {
-    if (!Array.isArray(message?.content)) continue
-    const content = message.content
-    for (let index = content.length - 1; index >= 0; index--) {
-      const tag = tagOfBlock(content[index])
-      if (tag === null) continue
-      content.splice(index, 1)
-      const previous = index > 0 ? content[index - 1] : null
-      if (previous?.type === "text" && typeof previous.text === "string") {
-        previous.text += `\n${tag}`
-      } else if (content[index]?.type === "text" && typeof content[index].text === "string") {
-        content[index].text = `${tag}\n${content[index].text}`
-      } else {
-        content.splice(index, 0, { type: "text", text: tag })
-      }
-    }
-  }
-  return next
 }
 
 // ════════════════════════════════════════════════════════════════════

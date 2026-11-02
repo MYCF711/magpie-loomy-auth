@@ -45,6 +45,9 @@
 
 思考档位 `none / low / medium / high / xhigh`，默认 `low`。
 
+图片使用标准 `image_url` 内容块传给 Loomy，包含 data URI 的图片块也保持原样。
+升级图片处理修复后，请开新会话验证，避免旧上下文中的 Base64 文本继续影响模型。
+
 ---
 
 ## 签到
@@ -93,13 +96,33 @@ magpie plugin list
 
 ---
 
+## 验证
+
+`npm test` 运行离线测试，不发送模型请求。
+
+图片实网回归通过插件公开 loader 调用所有声明支持图片的模型，识别合成图片中的文字。
+此命令会消费账号积分；凭据只从本地文件读取，不写回文件：
+
+```bash
+LOOMY_AUTH_FILE=/path/to/plugin-auth.json node --test tests/vision-live.mjs
+
+# 单独验证 DeepSeek 的 high 档位
+MODEL_IDS=DeepSeek-V4.1-Flash REASONING_EFFORT=high \
+  LOOMY_AUTH_FILE=/path/to/plugin-auth.json node --test tests/vision-live.mjs
+```
+
+默认使用 `none`，可通过 `REASONING_EFFORT` 指定档位；`MODEL_IDS` 支持逗号分隔的模型 ID。
+每次请求最多输出 8,192 token，超时为 120 秒；达到上限而没有识别结果时测试失败。
+
+---
+
 ## 常见问题
 
 **积分 0，但 App 里还有？** 今日额度用光了，等北京时间 0 点重置。
 
 **登录已失效？** 会话 14 天到期，重新登录一次。
 
-**会花我的积分吗？** 不会，只读余额和领奖励。
+**会花我的积分吗？** 余额查询和签到不扣对话积分；模型对话和手动图片实网测试会扣积分。
 
 **25,000 怎么来的？** 25,000 = 注册 5,000 + 新手任务 10,000 + 邀请 5,000 + 被邀 5,000。
 后两笔需要本机有两个以上账号（互相邀请），平台允许。全是**一次性**，领完就没了；
@@ -115,7 +138,6 @@ magpie plugin list
 |---|---|
 | [yetone/magpie](https://github.com/yetone/magpie)（MIT） | 插件契约：`usage` 窗口字段、`used` 归一化、`aside` 语义、签到 outcome 清单、`free` 判据 |
 | [sucooer/magpie-plugins](https://github.com/sucooer/magpie-plugins)（MIT） | 账号接口的 HMAC-SHA1 签名构造、桌面端登录态（leveldb）读取方式 |
-| [agent2api](https://github.com/aimod-cc/agent2api) | deepseek 系模型只认 `<image_base64>` 标记、不认 `image_url` 的结论 |
 
 ---
 

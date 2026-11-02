@@ -19,10 +19,6 @@
   - `src/desktop.mjs`：Loomy 桌面端登录态的 leveldb 读取方式（键名
     `loomy-auth-session`、追加写所以从后往前找）。
 
-- **agent2api**（`github.com/aimod-cc/agent2api`, 许可未核实；`loomy/sign.rs`, `loomy/images.rs`）
-  - deepseek 系模型只认 `<image_base64>` 标记、不认 `image_url` data URI 的结论，
-    以及把标记并入相邻 text 块的做法。
-
 ## 与上述实现的差异
 
 本插件的额度上报口径与它们**不同**：市场现有实现不上报 `used`（或在拿不到上限时

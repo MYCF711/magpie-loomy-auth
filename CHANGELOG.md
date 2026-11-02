@@ -3,6 +3,11 @@
 > 每个版本一节，**一条一行**，说用户能感知的变化。
 > 格式与发布流程见 [magpie-plugin-scaffold](https://github.com/MYCF711/magpie-plugin-scaffold) 的 [UPDATING.md](https://github.com/MYCF711/magpie-plugin-scaffold/blob/main/UPDATING.md)。
 
+## 未发布
+
+- 修复 DeepSeek 图片输入：保留标准 `image_url` 内容块，移除把图片转换为 `<image_base64>` 文本的规则。
+- 新增手动图片实网回归，覆盖全部声明支持图片的模型，并支持单独验证思考档位。
+
 ## 0.1.21 — 2026-10-31
 
 - **显示名迁移到 `magpie.name`**：`package.json` 的 `name` 改回 ASCII slug `magpie-plugin-loomy-auth`（bun 依赖键，避免 `plugin update` 报 `unrecognised dependency format`）；卡片标题由 `magpie.name: "讯飞 Loomy"` 提供（magpie 0.1.2404 的 `magpie.name` 修复）

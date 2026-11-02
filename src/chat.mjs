@@ -1,15 +1,6 @@
 // Loomy · 请求接管（loader 的 fetch）
 //
-// 只做五件事，其余原样转发（上游本来就是 OpenAI 协议，不做协议转换）：
-//
-//   ① 换成 Loomy 的 token 双头（AI SDK 发的 Bearer 是占位值，必须覆盖）
-//   ② deepseek 系模型：把 `image_url` data URI 改写成 `<image_base64>` 标记
-//   ③ HTTP 200 + 信封 `{code:"100002"}` 的失效响应 → 打上
-//      `X-Magpie-Sign-In: expired`（magpie 据此标记账号）
-//   ④ 本地额度闸：**已知**两池皆空时直接回 429，不白撞上游
-//   ⑤ 「内容太长了」的 400/413/422 → 把文案换成 magpie `tooLongRe` 认得的中文写法，
-//      否则整轮会话会以 400 失败（详见 `rewriteTooLongRefusal` 的注释）
-//
+// 鉴权、登录失效、额度闸与长度错误适配；图片内容原样转发。
 // ⚠ SSE 一律原样透传：解析 clone 会把整条流缓冲住，用户看到的是「一直不出字」。
 //   所以只有 `content-type: application/json` 才 clone 来判业务码。
 //
@@ -20,7 +11,7 @@ import { _pure } from "./pure.mjs"
 import { CHAT_TIMEOUT_MS } from "./constants.mjs"
 import { exhausted } from "./usage.mjs"
 
-const { businessCode, isAuthErrorCode, prefersTagFormat, rewriteImagesToTags } = _pure
+const { businessCode, isAuthErrorCode } = _pure
 
 export async function chatFetch({ input, init, credential, session, usageValue }) {
   const request = input instanceof Request ? new Request(input, init) : null
@@ -32,7 +23,7 @@ export async function chatFetch({ input, init, credential, session, usageValue }
     bodyText = typeof rawBody === "string" ? rawBody : await new Response(rawBody).text()
   }
 
-  // ④ 已知耗尽：不发给上游，直接回一个明确的 429
+  // 已知耗尽：不发给上游，直接回一个明确的 429
   if (usageValue && exhausted(usageValue)) {
     return jsonResponse(429, {
       error: {
@@ -41,23 +32,6 @@ export async function chatFetch({ input, init, credential, session, usageValue }
         code: "insufficient_points",
       },
     })
-  }
-
-  let model = ""
-  try {
-    model = JSON.parse(bodyText)?.model ?? ""
-  } catch {
-    // 非 JSON body：原样透传
-  }
-
-  if (model && prefersTagFormat(model) && bodyText) {
-    try {
-      const parsed = JSON.parse(bodyText)
-      const rewritten = rewriteImagesToTags(parsed)
-      if (rewritten !== parsed) bodyText = JSON.stringify(rewritten)
-    } catch {
-      // body 不是 JSON 时保持原样
-    }
   }
 
   const incoming = new Headers(request ? request.headers : init?.headers)

@@ -1,4 +1,4 @@
-// 签到 outcome、凭据形状、请求改写 —— 都是市场现装插件实际做错的点。
+// 签到 outcome、凭据形状与模型目录的行为约束。
 
 import { test } from "node:test"
 import assert from "node:assert/strict"
@@ -6,7 +6,7 @@ import assert from "node:assert/strict"
 import { _internal } from "../index.mjs"
 
 const { pure, quotaPatch, staticModels } = _internal
-const { checkinOutcome, credentialOf, maskPhone, rewriteImagesToTags, prefersTagFormat, parseModels, splitRateSuffix } = pure
+const { checkinOutcome, credentialOf, maskPhone, parseModels, splitRateSuffix } = pure
 
 const LEGAL = ["claimed", "done", "ineligible", "inactive", "captcha", "failed"]
 
@@ -83,27 +83,6 @@ test("凭据里的 quota 与业务日要读出来（写回后的下一轮靠它�
 test("手机号掩码与规范化", () => {
   assert.equal(maskPhone("18170800632"), "181****0632")
   assert.equal(maskPhone("123"), "123")
-})
-
-// ── 图片适配（deepseek 系只认标记）──────────────────────────────────
-
-test("只有 deepseek 系走 <image_base64> 标记", () => {
-  assert.equal(prefersTagFormat("DeepSeek-V4.1-Flash"), true)
-  assert.equal(prefersTagFormat("GLM-5.3-Flash"), false)
-  assert.equal(prefersTagFormat("auto"), false)
-})
-
-test("图片块并入相邻 text 块，且只动 deepseek 会用到的那种 body 形状", () => {
-  const body = { messages: [{ role: "user", content: [{ type: "text", text: "看图" }, { type: "image_url", image_url: { url: "data:image/png;base64,AAAA" } }] }] }
-  const out = rewriteImagesToTags(body)
-  assert.equal(out.messages[0].content.length, 1)
-  assert.match(out.messages[0].content[0].text, /^看图\n<image_base64>AAAA<\/image_base64>$/)
-  assert.equal(body.messages[0].content.length, 2, "不许改动原对象")
-})
-
-test("没有图片时原样返回（同一个引用，避免无谓复制）", () => {
-  const body = { messages: [{ role: "user", content: "纯文本" }] }
-  assert.equal(rewriteImagesToTags(body), body)
 })
 
 // ── 模型目录 ────────────────────────────────────────────────────────

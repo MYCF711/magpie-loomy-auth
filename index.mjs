@@ -29,7 +29,7 @@
 //   ① config(cfg)                      声明 provider + 静态模型表
 //   ② auth.methods[].authorize()       三种登录（桌面端导入 / 短信 / 粘贴 session）
 //   ③ auth.refresh                      Loomy 无续期接口 —— 显式返回 undefined
-//   ④ auth.loader(getAuth, provider)    请求接管（token 双头 + 图片改写 + 额度闸）
+//   ④ auth.loader(getAuth, provider)    请求接管（token 双头 + 图片透传 + 额度闸）
 //   ⑤ auth.usage(getAuth, provider)     两池窗口（本插件的核心）
 //   ⑥ auth.checkin(getAuth, provider)   每日额度刷新（合法 outcome）
 //   ⑦ provider.models(provider,{auth})  每账号真实目录（失败退回静态表）
@@ -55,7 +55,7 @@
 //   `/api/v1/points/balance` 只回 3 个数，是读余额的最小端点
 //   `/api/v1/points/records` 的每条 debit 带 `consumeSource` + `dailyCycleDate`
 //   `/api/v1/models` 含 image 型条目，必须按 `type === "chat"` 过滤
-//   deepseek 系模型只认 `<image_base64>` 标记，不认 `image_url` data URI
+//   视觉模型使用标准 `image_url`，图片块保持原样
 //   业务日按东八区；部分错误是 HTTP 200 + 信封 code
 
 import { _pure } from "./src/pure.mjs"

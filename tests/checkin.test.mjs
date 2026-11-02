@@ -81,7 +81,7 @@ test("凭据里的 quota 与业务日要读出来（写回后的下一轮靠它�
 })
 
 test("手机号掩码与规范化", () => {
-  assert.equal(maskPhone("18170800632"), "181****0632")
+  assert.equal(maskPhone("13800138000"), "181****0632")
   assert.equal(maskPhone("123"), "123")
 })
 

@@ -86,7 +86,7 @@ cd ~/.config/magpie/plugins && ~/.cache/magpie/bun/1.4.4/magpie-bun.exe install
 ```bash
 magpie plugin list
 # magpie-plugin-loomy-auth  on
-#   loomy (讯飞 Loomy, 10 models)  signed in as 189****8051
+#   loomy (讯飞 Loomy, 10 models)  signed in as 138****8000
 ```
 
 ⚠ 改了代码要 **bump `version` 再打包** —— 同一版本号重打，bun 会命中缓存（输出 `no changes`）。

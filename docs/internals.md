@@ -11,7 +11,7 @@ Loomy（讯飞）做成 magpie 供应商插件：**桌面端登录态导入 / �
 
 ```
 magpie-plugin-loomy-auth  on
-  loomy (讯飞 Loomy, 10 models)  signed in as 189****8051
+  loomy (讯飞 Loomy, 10 models)  signed in as 138****8000
 ```
 
 ---
@@ -144,9 +144,9 @@ Loomy 还有第三笔额度 —— **新手任务奖励**，总计 10,000 分，
 **实测结论（2026-10-26，真号跑的）**：邀请双方**各得 5000**，不是 2000。
 
 ```
-操作：181****0632 兑换 189****8051 的码 E4DPT6（走 bindInviteCode → POST /points/activation）
+操作：181****0632 兑换 138****8000 的码 E4DPT6（走 bindInviteCode → POST /points/activation）
 
-189****8051  永久积分 14860 → 19860  (+5000)   流水：+5000 邀请好友奖励
+138****8000  永久积分 14860 → 19860  (+5000)   流水：+5000 邀请好友奖励
 181****0632  永久积分 10000 → 15000  (+5000)   流水：+5000 填写邀请码奖励
 E4DPT6  usedCount 0 → 1                       181 activation false → true
 ```
@@ -244,10 +244,10 @@ node tests/live.mjs       # 真实账号 + 真实上游（只读 + 幂等签到�
 `tests/live.mjs` 在真账号上的当前输出（2026-10-26）：
 
 ```
-=== loomy  18970098051
+=== loomy  <PHONE>
     balance=8979 积分  used=30.42%  limit=5000  永久池 aside
     checkin → {"outcome":"done","message":"今日额度已刷新（3479/5000 积分）"}
-=== loomy#0zloqw  18170800632
+=== loomy#0zloqw  <PHONE>
     balance=0 积分  used=100  ← 参与路由，会让这个号沉底
     checkin → {"outcome":"done",...}
 ✅ 全部通过
@@ -328,7 +328,7 @@ magpie 的「有新版本」检查按**包名**去 npm 查，与仓库属主无�
 
 ```
 credit(25,000) − debit(consumeSource=permanent) = balance
-  189****8051: 25,000 − 140  = 24,860  ✅ 与接口 balance 一致
+  138****8000: 25,000 − 140  = 24,860  ✅ 与接口 balance 一致
   181****0632: 25,000 − 5,000 = 20,000  ✅ 与接口 balance 一致
 ```
 

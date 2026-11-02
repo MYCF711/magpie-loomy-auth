@@ -379,7 +379,7 @@ export async function claimAllTasks(session, tasks, fetcher = fetch) {
 // 实测（2026-10-26，两个真实账号）：
 //   GET  /api/v1/invitation-codes   → {list:[{inviteCode,usedCount,maxUses,status}]}
 //     138****8000 → E4DPT6（上限 1000，已用 0）
-//     181****0632 → FDW3CU（上限 1000，已用 0）
+//     138****8000 → FDW3CU（上限 1000，已用 0）
 //   GET  /api/v1/points/activation  → {activated:false}
 //   POST /api/v1/points/activation  → 绑定别人的邀请码（**每个账号只能一次**）
 //

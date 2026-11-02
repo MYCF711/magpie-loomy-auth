@@ -64,7 +64,7 @@ test("签到拿到上限才写回凭据；拿不到不写（不编造 dailyQuota
 // ── 凭据形状（sucooer 只认第一种，于是收到映射就变成「未登录」）──────
 
 test("四种凭据形态都要认", () => {
-  const flat = { type: "oauth", access: "S1", accountId: "181****0632" }
+  const flat = { type: "oauth", access: "S1", accountId: "138****8000" }
   assert.equal(credentialOf(flat)?.session, "S1")
   assert.equal(credentialOf({ type: "oauth", access: "S2" })?.session, "S2")
   assert.equal(credentialOf({ loomy: { access: "S3" } })?.session, "S3")
@@ -81,7 +81,7 @@ test("凭据里的 quota 与业务日要读出来（写回后的下一轮靠它�
 })
 
 test("手机号掩码与规范化", () => {
-  assert.equal(maskPhone("13800138000"), "181****0632")
+  assert.equal(maskPhone("13800138000"), "138****8000")
   assert.equal(maskPhone("123"), "123")
 })
 

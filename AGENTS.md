@@ -65,6 +65,7 @@ curl -s "https://usemagpie.ai/api/latest?channel=stable" | grep -o '"version":"[
 | 14 | npm 上装到了别人的包 | 本仓库 **npm 包名 ≠ 仓库名**：npm 是 `magpie-plugin-loomy-auth`，仓库是 `magpie-loomy-auth`。加 `-plugin-` 段就是为了避开撞名 | internals 从本地 tgz 安装 |
 | 15 | 卡片标题 / 源码按钮不对 | `registry-entry.json` 的 `package` 必须与 **npm 包名**（`publish-npm.mjs` 的 `PUBLISH_AS`）一字不差；`name` 才是市场显示名（`<中文> <English>`）；插件不写 magpie 的市场缓存 | internals 从本地 tgz 安装 |
 | 16 | 长对话里某个号回 `400 内容太长了，请精简输入或开启新对话`，**整轮会话直接失败**，组里其它号一次没被问 | magpie 的 `tooLongRe`（`internal/gateway/gateway.go:7484`）中文只认 `上下文(长度)?(超\|过长)` 与 `超(过\|出)(了)?(模型)?(的)?(最大)?上下文` —— 这条文案一个「上下文」都没有 ⇒ `overflowed()` 为假 ⇒ 不换号、不 rest，把 400 摔给客户端。本插件在 `chatFetch` 里改写成 `上下文超出长度限制`（只换文案，状态码与其余字段原样）。**根因在别处**：`yetone/magpie#3654` —— 同一个模型在组内/组外报的 `contextWindow` 不同，agent 看见数字变了就把整个历史重新组装一次，一次请求带两份历史（实测 msgs 558→1175、字符 6.4×）。判据：`node tests/too-long.test.mjs` | CHANGELOG 0.1.19 · `src/chat.mjs` · magpie#3654 |
+| 17 | **上游偶发或固定回 403 `TM.00000001`（文案是「网络繁忙，请稍后重试」），重试和换账号都没用**；或者某个 provider 换到新网络 / 新账号后就不通 | 每个打上游的 `fetch` 都**显式**带 `User-Agent`，值是**该服务官方客户端**的 UA —— 绝不写 `<包名>/<版本号>`，也绝不让宿主的 `magpie/<version>` 透传（插件不设 UA 时它就这么上去）。官方是网页就用完整 Chrome UA；有 App / CLI 客户端就用那个客户端的 UA。判据：`node scripts/check-ua.mjs` 退出 0（模板坑表第 38 条） | README「3. User-Agent 常常是硬校验」· `scripts/check-ua.mjs` |
 
 ---
 

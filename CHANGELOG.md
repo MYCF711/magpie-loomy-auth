@@ -3,6 +3,15 @@
 > 每个版本一节，**一条一行**，说用户能感知的变化。
 > 格式与发布流程见 [magpie-plugin-scaffold](https://github.com/MYCF711/magpie-plugin-scaffold) 的 [UPDATING.md](https://github.com/MYCF711/magpie-plugin-scaffold/blob/main/UPDATING.md)。
 
+## 0.1.25 — 2026-11-05
+
+**图标换成 Loomy 官方 logo（插件卡片 + 供应商两处都换）**
+
+- 来源：Loomy 官网 `https://loomy.xunfei.cn/` 的 `<link rel="icon" href="/icon.png" sizes="1024x1024">`，1024×1024 原图。
+- 之前用的是讯飞开放平台的 `ex` 字标（`magpie.icon`）和客户端 `app.ico` 的 256 档（`src/icon.mjs`），两个都不是 Loomy 自己的形象。
+- 按原图的薄荷绿 `#72E3AD` 把透明四角填成方形，加 28% 圆角（对齐 magpie `.pm-logo` 的 10/36），缩到 256（供应商）/ 128（卡片）。
+- `index.mjs` 的 `auth.icon` 与 `package.json` 的 `magpie.icon` 现在指向同一张官方图。
+
 ## 0.1.24 — 2026-11-05
 
 **图标提亮，深色主题下不再发黑**

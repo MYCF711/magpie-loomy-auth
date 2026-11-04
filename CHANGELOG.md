@@ -3,6 +3,11 @@
 > 每个版本一节，**一条一行**，说用户能感知的变化。
 > 格式与发布流程见 [magpie-plugin-scaffold](https://github.com/MYCF711/magpie-plugin-scaffold) 的 [UPDATING.md](https://github.com/MYCF711/magpie-plugin-scaffold/blob/main/UPDATING.md)。
 
+## 0.1.24 — 2026-11-05
+
+**图标提亮，深色主题下不再发黑**
+
+讯飞官方 favicon 是 `(13,53,82)` 的深蓝，放在 magpie 深色主题的 `--pill` 灰底上几乎看不见（0.1.23 截图里只剩一个影子）。现在把深蓝提到 `#60a5fa`（同色相、提亮），裁掉透明边后等比撑满 96×96，其余不变。
 ## 0.1.23 — 2026-11-05
 
 **卡片图标内嵌官方图；`magpie.summary` 补上（按语言的对象）**

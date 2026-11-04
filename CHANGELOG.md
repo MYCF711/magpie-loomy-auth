@@ -3,6 +3,15 @@
 > 每个版本一节，**一条一行**，说用户能感知的变化。
 > 格式与发布流程见 [magpie-plugin-scaffold](https://github.com/MYCF711/magpie-plugin-scaffold) 的 [UPDATING.md](https://github.com/MYCF711/magpie-plugin-scaffold/blob/main/UPDATING.md)。
 
+## 0.1.23 — 2026-11-05
+
+**卡片图标内嵌官方图；`magpie.summary` 补上（按语言的对象）**
+
+- 图标原来是指向 `raw.githubusercontent.com` 的 URL，大陆网络下拉不到、卡片经常空着；
+  现改官方 60×60 图等比放到 128×128 透明画布内嵌为 data URI（3.7 KB），不依赖网络。
+- `magpie.summary` 新增 `{"zh": …, "en": …}`（151 B / 153 B，上限 300）。yetone/magpie#394
+  的 `ownSummary` 读 `map[string]string`，之前没有这个字段，卡片上没有任何一句话。
+
 ## 0.1.22 — 2026-11-04
 
 **出站 UA 全部换成官方客户端 UA（同步脚手架 0.3.10 的坑表第 38 条）**

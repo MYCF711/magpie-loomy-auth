@@ -49,6 +49,24 @@ export const SUCCESS_CODE = "000000"
 /** 登录态失效的业务码（上游部分错误是 HTTP 200 + 信封 code）。 */
 export const AUTH_ERROR_CODES = ["020002", "100002"]
 
+/**
+ * ERROR-CODES.md §3 词表里本插件真正用到的几个码。
+ *
+ * ⚠ `code` 是**机器读**的稳定标识，只能取词表内的值 —— 自造一个码等于没给：
+ *   宿主按词表分支，词表外就是「不认识」，既不退避也不换号。CI 的「供应商插件规定」
+ *   会静态判这一条（R2），历史上 `insufficient_points` 就是这么挂的。
+ *
+ * 只列用到的；加码要改 ERROR-CODES.md，不许各插件自己造词。
+ */
+export const ERROR_CODES = Object.freeze({
+  /** 429 · 可退避 · 换号有救 —— 限流 / 账号冷却，本地额度闸也归这一桶 */
+  rateLimited: "rate_limited",
+  /** 503 · 可重试 —— 连不上上游（断连 / 拒连 / DNS），是上游那边出事，不是请求的问题 */
+  upstreamUnavailable: "upstream_unavailable",
+  /** 504 · 可重试 —— 等到超时 / 流被截断，宿主该退避或换号，不是「业务错误」 */
+  upstreamTimeout: "upstream_timeout",
+})
+
 export const REQUEST_TIMEOUT_MS = 20_000
 export const CHAT_TIMEOUT_MS = 300_000
 
@@ -64,6 +82,13 @@ export const APP_ID = trim(process.env.LOOMY_XFYUN_APP_ID) || "GM3LOOMY"
 
 export const CLIENT_MODEL_ID = "Web"
 export const CLIENT_DEVICE_ID = "web"
+/**
+ * 官方 Loomy 桌面客户端的 UA —— **本插件唯一的 UA 常量**。
+ * 三处出站都要用它：chat（loader 的 fetch）· 业务/积分网关 · 账号签名 API；
+ * 与签名体 `base.ua` 是同一个值。
+ * 禁止出现 `magpie/…` / `magpie-…/…` 形态：上游网关按 `<product>/<version>`
+ * 认第三方客户端，命中即 403；不显式设置时 fetch 的默认 UA（`node`）同样不合规。
+ */
 export const CLIENT_UA = "Loomy|Desktop|Electron|macOS"
 export const CLIENT_VERSION = "1.0.0"
 

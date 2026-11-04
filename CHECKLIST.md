@@ -58,6 +58,14 @@
       判据：usage 与 outcome 的语义锁没被破坏
 
 □ 13. node ../magpie-plugin-scaffold/scripts/check.mjs . 退出码 = 0
+
+□ 14. 出站 User-Agent 是官方客户端 UA，不是我们自己的产品名
+      判据：node scripts/check-ua.mjs . 退出码 = 0；
+            插件里搜不到 `magpie/…` / `magpie-xxx/<ver>` / `"node"` / `Bun/…` /
+            截断的 Mozilla（缺 `(KHTML, like Gecko) Chrome/… Safari/537.36`）；
+            官方是网页的是完整 Chrome UA，有 App / CLI 客户端的是那个客户端的 UA；
+            loader 的 `fetch` 包装里 `"user-agent"` 在跳过名单内、由插件补官方值
+      出处：模板坑表第 38 条 · scripts/check-ua.mjs
 ```
 
 ---

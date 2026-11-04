@@ -17,7 +17,7 @@
 //   漏拦 = 上游回一次错误（有明确文案）；错拦 = 一个好好的号发不出请求。
 
 import { _pure } from "./pure.mjs"
-import { CHAT_TIMEOUT_MS } from "./constants.mjs"
+import { CHAT_TIMEOUT_MS, CLIENT_UA, ERROR_CODES } from "./constants.mjs"
 import { exhausted } from "./usage.mjs"
 
 const { businessCode, isAuthErrorCode, prefersTagFormat, rewriteImagesToTags } = _pure
@@ -32,13 +32,17 @@ export async function chatFetch({ input, init, credential, session, usageValue }
     bodyText = typeof rawBody === "string" ? rawBody : await new Response(rawBody).text()
   }
 
-  // ④ 已知耗尽：不发给上游，直接回一个明确的 429
+  // ④ 已知耗尽：不发给上游，直接回一个明确的 429。
+  //    `code` 只能取 ERROR-CODES.md §3 词表（R2）：耗尽在宿主眼里就是「限流 / 冷却」，
+  //    取 `rate_limited`（429 · 可退避 · 换号有救）。自造 `insufficient_points` 属于
+  //    词表外的码 —— 宿主不认识就既不退避也不换号，CI 也会直接判失败。
   if (usageValue && exhausted(usageValue)) {
     return jsonResponse(429, {
       error: {
         message: "Loomy 积分已耗尽（今日额度与永久积分均为 0），请签到或更换账号",
         type: "rate_limit_error",
-        code: "insufficient_points",
+        code: ERROR_CODES.rateLimited,
+        status: 429,
       },
     })
   }
@@ -61,9 +65,13 @@ export async function chatFetch({ input, init, credential, session, usageValue }
   }
 
   const incoming = new Headers(request ? request.headers : init?.headers)
-  for (const key of ["authorization", "x-api-key", "token", "content-length", "host"]) incoming.delete(key)
+  // `user-agent` 必须进跳过名单：magpie 递给插件的是它自己的 `magpie/<version>`，
+  // 原样转发就是这个插件在替「第三方客户端」投标（上游网关按 `<product>/<version>` 认人，
+  // 命中即 403 TM.00000001）。下面统一换成官方 Loomy 客户端的 UA。
+  for (const key of ["authorization", "x-api-key", "token", "content-length", "host", "user-agent"]) incoming.delete(key)
   incoming.set("token", session)
   incoming.set("Authorization", `Bearer ${session}`)
+  incoming.set("user-agent", CLIENT_UA)
   if (bodyText) incoming.set("Content-Type", "application/json")
 
   let response

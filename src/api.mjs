@@ -16,6 +16,7 @@ import {
   CLIENT_MODEL_ID,
   CLIENT_UA,
   CLIENT_VERSION,
+  ERROR_CODES,
   INTEGRATION_BASE,
   LEDGER_MAX_PAGES,
   LEDGER_PAGE_SIZE,
@@ -41,7 +42,9 @@ const {
 
 function integrationHeaders(session) {
   // 实测：两个头都要，只给 Authorization 上游回鉴权失败
-  return { token: session, Authorization: `Bearer ${session}` }
+  // UA 恒为官方客户端 UA（CLIENT_UA 是全插件唯一常量）；不写就是 fetch 的默认 `node`，
+  // 那是「第三方客户端」的信号头之一。
+  return { token: session, Authorization: `Bearer ${session}`, "user-agent": CLIENT_UA }
 }
 
 /**
@@ -65,7 +68,7 @@ export async function tokenRequest(method, pathAndQuery, session, body, what, fe
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     })
   } catch (error) {
-    throw httpError(502, `${what}失败：${error?.message ?? error}`)
+    throw networkError(what, error)
   }
 
   const json = await readJson(res)
@@ -99,8 +102,33 @@ function signInExpired(message) {
   return Object.assign(new Error(message), { signIn: "expired", status: 401 })
 }
 
-function httpError(status, message) {
-  return Object.assign(new Error(message), { status })
+function httpError(status, message, code) {
+  const error = Object.assign(new Error(message), { status })
+  if (code) error.code = code
+  return error
+}
+
+/**
+ * 请求**没拿到响应**时的状态码（ERROR-CODES.md §2 的判据）。
+ *
+ * ⚠ 这两种都不许落 502：502 表示「上游给了明确的错误体（业务错误）」，宿主读到它
+ *   就既不退避也不换号，直接把这个错误摔给用户 —— 而连接层失败是「上游那边的事，
+ *   重试有意义」。判据（R8）：超时一律 503/504。
+ *
+ *   超时（AbortSignal.timeout / 20 秒没响应）→ 504 `upstream_timeout`：宿主退避或换号；
+ *   其它（断连 / 拒连 / DNS）        → 503 `upstream_unavailable`：暂时不可用，同样可重试。
+ */
+function networkError(what, error) {
+  const detail = String(error?.message ?? error)
+  const timedOut =
+    error?.name === "TimeoutError" || error?.name === "AbortError" || error?.code === "ABORT_ERR"
+  return timedOut
+    ? httpError(
+        504,
+        `${what}超时：${REQUEST_TIMEOUT_MS / 1000} 秒内没有响应（${detail}）`,
+        ERROR_CODES.upstreamTimeout,
+      )
+    : httpError(503, `${what}连不上上游（${detail}）`, ERROR_CODES.upstreamUnavailable)
 }
 
 async function readJson(res) {
@@ -253,12 +281,15 @@ export async function signedPost(path, param, what, fetcher = fetch) {
   const headers = {
     ...signedHeaders("POST", path, body, secrets),
     "Content-Type": "application/json",
+    // 签名只覆盖 method/path/digest/content-type/date/nonce，UA 不在签名内；
+    // 但出站请求仍必须带官方客户端 UA（见 constants.mjs 的 CLIENT_UA）。
+    "user-agent": CLIENT_UA,
   }
   let res
   try {
     res = await fetcher(`${XFYUN_ACCOUNT_BASE}${path}`, { method: "POST", headers, body, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) })
   } catch (error) {
-    throw httpError(502, `${what}失败：${error?.message ?? error}`)
+    throw networkError(what, error)
   }
   const json = await readJson(res)
   if (!res.ok) throw httpError(res.status, `${what}返回 HTTP ${res.status}`)

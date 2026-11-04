@@ -3,6 +3,29 @@
 > 每个版本一节，**一条一行**，说用户能感知的变化。
 > 格式与发布流程见 [magpie-plugin-scaffold](https://github.com/MYCF711/magpie-plugin-scaffold) 的 [UPDATING.md](https://github.com/MYCF711/magpie-plugin-scaffold/blob/main/UPDATING.md)。
 
+## 0.1.22 — 2026-11-04
+
+**出站 UA 全部换成官方客户端 UA（同步脚手架 0.3.10 的坑表第 38 条）**
+
+- 上游网关按 `<product>/<version>` 形态识别「第三方客户端」，命中即回
+  `403 {"error_code":"TM.00000001","error_msg":"网络繁忙，请稍后重试"}`；而 magpie 给插件宿主
+  的 UA 固定是 `magpie/<version>`，插件不显式覆盖就原样透传，同样命中
+- 本仓库所有打上游的出站点改为显式带**官方客户端** UA；不再出现 `<包名>/<版本号>`、
+  `node`、`Bun/…` 或截断的 Mozilla
+- 新增 `scripts/check-ua.mjs`（`npm run check:ua`，0 = 合规）、`AGENTS.md` 坑表第 17 条、
+  `CHECKLIST.md` 的 UA 勾选项
+
+**错误出口对齐 ERROR-CODES.md（CI「供应商插件规定」判的两条 R2 / R8）**
+
+- 本地额度闸那记 429 的 `code` 从自造的 `insufficient_points` 改成词表里的
+  `rate_limited`（429 · 可退避 · 换号有救），错误体补 `status: 429`。词表外的码宿主不认识，
+  等于既不退避也不换号
+- 请求**没拿到响应**时不再一律 502：20 秒超时 → `504 upstream_timeout`，断连/拒连/DNS →
+  `503 upstream_unavailable`。502 表示「上游给了明确的错误体（业务错误）」，落在这里
+  宿主会既不退避也不换号，把一个「重试就好」的错误直接摔给用户
+- 词表收敛到 `src/constants.mjs` 的 `ERROR_CODES`，新增 `tests/error-codes.test.mjs`
+  锁住 R2 / R8 / R9（76 条测试全过）
+
 ## 0.1.21 — 2026-10-31
 
 - **显示名迁移到 `magpie.name`**：`package.json` 的 `name` 改回 ASCII slug `magpie-plugin-loomy-auth`（bun 依赖键，避免 `plugin update` 报 `unrecognised dependency format`）；卡片标题由 `magpie.name: "讯飞 Loomy"` 提供（magpie 0.1.2404 的 `magpie.name` 修复）

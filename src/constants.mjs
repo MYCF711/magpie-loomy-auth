@@ -64,6 +64,13 @@ export const APP_ID = trim(process.env.LOOMY_XFYUN_APP_ID) || "GM3LOOMY"
 
 export const CLIENT_MODEL_ID = "Web"
 export const CLIENT_DEVICE_ID = "web"
+/**
+ * 官方 Loomy 桌面客户端的 UA —— **本插件唯一的 UA 常量**。
+ * 三处出站都要用它：chat（loader 的 fetch）· 业务/积分网关 · 账号签名 API；
+ * 与签名体 `base.ua` 是同一个值。
+ * 禁止出现 `magpie/…` / `magpie-…/…` 形态：上游网关按 `<product>/<version>`
+ * 认第三方客户端，命中即 403；不显式设置时 fetch 的默认 UA（`node`）同样不合规。
+ */
 export const CLIENT_UA = "Loomy|Desktop|Electron|macOS"
 export const CLIENT_VERSION = "1.0.0"
 

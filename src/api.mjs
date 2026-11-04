@@ -41,7 +41,9 @@ const {
 
 function integrationHeaders(session) {
   // 实测：两个头都要，只给 Authorization 上游回鉴权失败
-  return { token: session, Authorization: `Bearer ${session}` }
+  // UA 恒为官方客户端 UA（CLIENT_UA 是全插件唯一常量）；不写就是 fetch 的默认 `node`，
+  // 那是「第三方客户端」的信号头之一。
+  return { token: session, Authorization: `Bearer ${session}`, "user-agent": CLIENT_UA }
 }
 
 /**
@@ -253,6 +255,9 @@ export async function signedPost(path, param, what, fetcher = fetch) {
   const headers = {
     ...signedHeaders("POST", path, body, secrets),
     "Content-Type": "application/json",
+    // 签名只覆盖 method/path/digest/content-type/date/nonce，UA 不在签名内；
+    // 但出站请求仍必须带官方客户端 UA（见 constants.mjs 的 CLIENT_UA）。
+    "user-agent": CLIENT_UA,
   }
   let res
   try {

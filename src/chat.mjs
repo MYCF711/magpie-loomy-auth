@@ -17,7 +17,7 @@
 //   漏拦 = 上游回一次错误（有明确文案）；错拦 = 一个好好的号发不出请求。
 
 import { _pure } from "./pure.mjs"
-import { CHAT_TIMEOUT_MS } from "./constants.mjs"
+import { CHAT_TIMEOUT_MS, CLIENT_UA } from "./constants.mjs"
 import { exhausted } from "./usage.mjs"
 
 const { businessCode, isAuthErrorCode, prefersTagFormat, rewriteImagesToTags } = _pure
@@ -61,9 +61,13 @@ export async function chatFetch({ input, init, credential, session, usageValue }
   }
 
   const incoming = new Headers(request ? request.headers : init?.headers)
-  for (const key of ["authorization", "x-api-key", "token", "content-length", "host"]) incoming.delete(key)
+  // `user-agent` 必须进跳过名单：magpie 递给插件的是它自己的 `magpie/<version>`，
+  // 原样转发就是这个插件在替「第三方客户端」投标（上游网关按 `<product>/<version>` 认人，
+  // 命中即 403 TM.00000001）。下面统一换成官方 Loomy 客户端的 UA。
+  for (const key of ["authorization", "x-api-key", "token", "content-length", "host", "user-agent"]) incoming.delete(key)
   incoming.set("token", session)
   incoming.set("Authorization", `Bearer ${session}`)
+  incoming.set("user-agent", CLIENT_UA)
   if (bodyText) incoming.set("Content-Type", "application/json")
 
   let response

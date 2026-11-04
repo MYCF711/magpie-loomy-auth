@@ -15,6 +15,17 @@
 - 新增 `scripts/check-ua.mjs`（`npm run check:ua`，0 = 合规）、`AGENTS.md` 坑表第 17 条、
   `CHECKLIST.md` 的 UA 勾选项
 
+**错误出口对齐 ERROR-CODES.md（CI「供应商插件规定」判的两条 R2 / R8）**
+
+- 本地额度闸那记 429 的 `code` 从自造的 `insufficient_points` 改成词表里的
+  `rate_limited`（429 · 可退避 · 换号有救），错误体补 `status: 429`。词表外的码宿主不认识，
+  等于既不退避也不换号
+- 请求**没拿到响应**时不再一律 502：20 秒超时 → `504 upstream_timeout`，断连/拒连/DNS →
+  `503 upstream_unavailable`。502 表示「上游给了明确的错误体（业务错误）」，落在这里
+  宿主会既不退避也不换号，把一个「重试就好」的错误直接摔给用户
+- 词表收敛到 `src/constants.mjs` 的 `ERROR_CODES`，新增 `tests/error-codes.test.mjs`
+  锁住 R2 / R8 / R9（76 条测试全过）
+
 ## 0.1.21 — 2026-10-31
 
 - **显示名迁移到 `magpie.name`**：`package.json` 的 `name` 改回 ASCII slug `magpie-plugin-loomy-auth`（bun 依赖键，避免 `plugin update` 报 `unrecognised dependency format`）；卡片标题由 `magpie.name: "讯飞 Loomy"` 提供（magpie 0.1.2404 的 `magpie.name` 修复）

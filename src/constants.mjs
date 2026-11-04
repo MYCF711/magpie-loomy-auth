@@ -49,6 +49,24 @@ export const SUCCESS_CODE = "000000"
 /** 登录态失效的业务码（上游部分错误是 HTTP 200 + 信封 code）。 */
 export const AUTH_ERROR_CODES = ["020002", "100002"]
 
+/**
+ * ERROR-CODES.md §3 词表里本插件真正用到的几个码。
+ *
+ * ⚠ `code` 是**机器读**的稳定标识，只能取词表内的值 —— 自造一个码等于没给：
+ *   宿主按词表分支，词表外就是「不认识」，既不退避也不换号。CI 的「供应商插件规定」
+ *   会静态判这一条（R2），历史上 `insufficient_points` 就是这么挂的。
+ *
+ * 只列用到的；加码要改 ERROR-CODES.md，不许各插件自己造词。
+ */
+export const ERROR_CODES = Object.freeze({
+  /** 429 · 可退避 · 换号有救 —— 限流 / 账号冷却，本地额度闸也归这一桶 */
+  rateLimited: "rate_limited",
+  /** 503 · 可重试 —— 连不上上游（断连 / 拒连 / DNS），是上游那边出事，不是请求的问题 */
+  upstreamUnavailable: "upstream_unavailable",
+  /** 504 · 可重试 —— 等到超时 / 流被截断，宿主该退避或换号，不是「业务错误」 */
+  upstreamTimeout: "upstream_timeout",
+})
+
 export const REQUEST_TIMEOUT_MS = 20_000
 export const CHAT_TIMEOUT_MS = 300_000
 

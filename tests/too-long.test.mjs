@@ -82,16 +82,24 @@ test("改写时删掉 content-length（body 长度变了），并留下排障头
   assert.equal(out.headers.get("x-loomy-vendor-status"), "400")
 })
 
-test("文案在其它位置（纯文本错误）也能改，且非 JSON 不破坏结构", async () => {
-  const res = new Response(`上游返回：${VENDOR_TEXT}`, {
+test("纯文本错误体（非 JSON）也能改，结构不被破坏", async () => {
+  // ⚠ 判据必须锚定**开头**：用户把报错贴进对话时，这串字会出现在正文中间，
+  //   那种回声不是上游在说这句话（见下方「回声不算」用例）。
+  const res = new Response(VENDOR_TEXT, {
     status: 400,
     headers: { "content-type": "text/plain; charset=utf-8" },
   })
-  const out = await rewriteTooLongRefusal(res)
+  const out = await rewriteTooLongRefusal(res, 3_000_000)
   assert.ok(out)
-  const text = await out.text()
-  assert.match(text, MAGPIE_TOO_LONG_ZH)
-  assert.match(text, /^上游返回：/, "前缀原样保留")
+  assert.match(await out.text(), MAGPIE_TOO_LONG_ZH)
+})
+
+test("文案出现在错误 message 的**中间**（用户回声）→ 一个字段都不许动", async () => {
+  const res = jsonResponse(400, { error: { message: `invalid request: 用户提到 ${VENDOR_TEXT} 这串字` } })
+  const out = await rewriteTooLongRefusal(res, 3_000_000)
+  assert.equal(out, null, "不是上游在说这句话，原样放行")
+  const still = await res.json()
+  assert.match(still.error.message, /invalid request:/, "原对象没被读干、没被改")
 })
 
 test("只说「内容过长」的变体同样命中", async () => {

@@ -3,6 +3,17 @@
 > 每个版本一节，**一条一行**，说用户能感知的变化。
 > 格式与发布流程见 [magpie-plugin-scaffold](https://github.com/MYCF711/magpie-plugin-scaffold) 的 [UPDATING.md](https://github.com/MYCF711/magpie-plugin-scaffold/blob/main/UPDATING.md)。
 
+## 0.1.26 — 2026-11-08
+
+**带图请求不再整轮 400 失败**
+
+- 实测 8 个对话模型 × 两种图片投递形态：`image_url` data URI 只要落到讯飞自研后端（spark / dashscope）就**整条 400**（`请求有误，请重试；若多次出现请更新应用版本` / `暂不支持该图片格式`），而 `<image_base64>` 文本标记在**全部 8 个模型**上都 200
+- 预改写判据从「只有 deepseek 系」改为**只认实测吃不下的那一批**：minimax / qwen-3.8-max / qwen3.8-flash / kimi / spark- / auto（大小写不敏感，`group/` 前缀也算）；**deepseek 移出清单**（实测它接受 `image_url`，同图 `prompt_tokens` 219 对标记形态的 102，且把图文本化正是把 token 放大到撞爆上下文的原因），GLM 与 mimo 同样保留原生视觉
+- **兜底**：模型名没命中判据、却仍因图片格式回 400 时，把同一个 body 转成标记形态**本地重发一次**（只一次，重发也失败就返回第二次的结果）；重发后的响应带排障头 `x-loomy-image-retry: 1`
+- 重发判据**锚定上游错误信封的 `error.message` 开头**，并拒绝「body 里本来就含这句文案」（用户贴报错截图/日志时会出现这种回声）与「已经含 `<image_base64>`」两种情形 —— 否则一个无关的 400 就会把大请求重发一遍、白烧一次额度
+- 超大请求上那条**通用** `请求有误，请重试` 400（请求体 > 200 万字符时）也接进 too-long 通道，改写成 magpie 认得的「上下文超出长度限制」，让 agent 压缩上下文而不是整轮失败
+- 长对话里开了图片的那一轮不再因为后端漂移就整个失败，用户直接看到回答
+
 ## 0.1.25 — 2026-11-05
 
 **图标换成 Loomy 官方 logo（插件卡片 + 供应商两处都换）**
@@ -25,6 +36,7 @@
   现改官方 60×60 图等比放到 128×128 透明画布内嵌为 data URI（3.7 KB），不依赖网络。
 - `magpie.summary` 新增 `{"zh": …, "en": …}`（151 B / 153 B，上限 300）。yetone/magpie#394
   的 `ownSummary` 读 `map[string]string`，之前没有这个字段，卡片上没有任何一句话。
+
 
 ## 0.1.22 — 2026-11-04
 

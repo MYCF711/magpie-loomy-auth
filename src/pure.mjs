@@ -485,13 +485,49 @@ function modelShape(m, base = {}) {
 // ════════════════════════════════════════════════════════════════════
 
 /**
- * deepseek 系模型只认 `<image_base64>` 标记；喂标准 `image_url` data URI
- * 会被上游当成截断的 base64 文本读（agent2api loomy/images.rs 的实测结论）。
- * 宁可不转，不能转错 —— 非 deepseek 一律不动。
+ * 已知**不吃** `image_url` 的模型 → true（发送前就把图片改写成 `<image_base64>` 标记）。
+ *
+ * 实测 **2026-11-08**，同一张合法 1×1 PNG 的两种投递形态 × 8 个对话模型：
+ *   `image_url` data URI 只在**讯飞自研后端**上整条 400 ——
+ *     iflytek-spark-loomy  → `请求有误，请重试；若多次出现请更新应用版本`
+ *     alibaba-dashscope    → `暂不支持该图片格式，请更换图片后再试`
+ *   而 `<image_base64>` 文本标记在**全部 8 个模型**上都是 200。
+ *   ⇒ 只要 `image_url` 被投给 spark / dashscope，整条请求就 400。
+ *
+ * 网关的后端**路由会漂移**（同一个 model 名不一定落同一个后端），所以判据只是
+ * 「大概率吃不下」的第一道闸；`chat.mjs` 另有一条按**文案**认的兜底重发。
+ *
+ * ⚠ 判据对大小写不敏感，并忽略 `group/` 这类前缀（`group/qwen-3.8-max` 算命中）。
+ * ⚠ GLM / mimo 实测接受 `image_url`，**不在**清单里（保留原生视觉）。
  */
 function prefersTagFormat(modelId) {
-  return String(modelId ?? "").toLowerCase().includes("deepseek")
+  const id = String(modelId ?? "").trim().toLowerCase()
+  if (!id) return false
+  const bare = id.slice(id.lastIndexOf("/") + 1)
+  return [bare, id].some((name) => TAG_FORMAT_MODELS.some((re) => re.test(name)))
 }
+
+/**
+ * 实测不吃 `image_url` 的模型族（矩阵与日期见 `prefersTagFormat` 的注释）。
+ *
+ * ⚠ **DeepSeek 不在这张表里**（2026-11-08 实测推翻旧结论，见 commit 说明）：
+ *   同一张 1×1 PNG，DeepSeek-V4.1-Flash 收 `image_url` 得 200 且
+ *   `prompt_tokens` 219，收 `<image_base64>` 标记得 200 且 `prompt_tokens` 102 ——
+ *   219 > 102 说明上游把 data URI **真解码成图片 token**，不是当截断的 base64 文本读。
+ *
+ *   而标记形态的代价是：每字节 base64 都算成一个 prompt token。2026-11-08 02:50
+ *   那次请求 32 张图 / 17.1 M 字符 ⇒ 约 400 万 token，直接撞爆 1,048,576 的上下文
+ *   上限，上游回 `请求有误，请重试…` —— 就是这条 400 的来源。
+ *   ⇒ DeepSeek 必须保留原生 `image_url`，绝不能再把图文本化。
+ */
+const TAG_FORMAT_MODELS = [
+  /minimax/, // MiniMax-M3 → spark
+  /qwen-?3\.8-?max/, // qwen-3.8-max → spark
+  /qwen-?3\.8-?flash/, // qwen3.8-flash → dashscope
+  /kimi/, // Kimi-k2.6 → spark
+  /spark-/, // spark-x2.6 → spark（讯飞自研）
+  /^auto$/, // 路由可能落到 spark —— 标记形态全模型都 200，统一按标记发
+]
 
 function tagOfBlock(block) {
   if (!block || block.type !== "image_url") return null

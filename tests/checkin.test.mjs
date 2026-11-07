@@ -85,15 +85,19 @@ test("手机号掩码与规范化", () => {
   assert.equal(maskPhone("123"), "123")
 })
 
-// ── 图片适配（deepseek 系只认标记）──────────────────────────────────
+// ── 图片适配（已知不吃 image_url 的模型走标记；完整矩阵见 tests/image-format.test.mjs）──
 
-test("只有 deepseek 系走 <image_base64> 标记", () => {
-  assert.equal(prefersTagFormat("DeepSeek-V4.1-Flash"), true)
+test("已知不吃 image_url 的模型走 <image_base64> 标记（GLM 保留原生视觉）", () => {
+  // deepseek 保持现状（沿用旧判据）；它**不是**因为「只认标记」才列在这里 —— 两种形态
+  // 实测都能过，是否改原生另议。别把这条当成「deepseek 只认标记」的结论。
+  // 2026-11-08 实测：DeepSeek 接受 image_url（prompt_tokens 219 > 标记的 102）⇒ 不预改写
+  assert.equal(prefersTagFormat("DeepSeek-V4.1-Flash"), false)
+  assert.equal(prefersTagFormat("MiniMax-M3"), true)
   assert.equal(prefersTagFormat("GLM-5.3-Flash"), false)
-  assert.equal(prefersTagFormat("auto"), false)
+  assert.equal(prefersTagFormat("auto"), true)
 })
 
-test("图片块并入相邻 text 块，且只动 deepseek 会用到的那种 body 形状", () => {
+test("图片块并入相邻 text 块，且只动带 data URI 图片的那种 body 形状", () => {
   const body = { messages: [{ role: "user", content: [{ type: "text", text: "看图" }, { type: "image_url", image_url: { url: "data:image/png;base64,AAAA" } }] }] }
   const out = rewriteImagesToTags(body)
   assert.equal(out.messages[0].content.length, 1)

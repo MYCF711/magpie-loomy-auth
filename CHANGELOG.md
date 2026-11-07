@@ -3,7 +3,7 @@
 > 每个版本一节，**一条一行**，说用户能感知的变化。
 > 格式与发布流程见 [magpie-plugin-scaffold](https://github.com/MYCF711/magpie-plugin-scaffold) 的 [UPDATING.md](https://github.com/MYCF711/magpie-plugin-scaffold/blob/main/UPDATING.md)。
 
-## 0.1.23 — 2026-11-08
+## 0.1.26 — 2026-11-08
 
 **带图请求不再整轮 400 失败**
 
@@ -13,6 +13,30 @@
 - 重发判据**锚定上游错误信封的 `error.message` 开头**，并拒绝「body 里本来就含这句文案」（用户贴报错截图/日志时会出现这种回声）与「已经含 `<image_base64>`」两种情形 —— 否则一个无关的 400 就会把大请求重发一遍、白烧一次额度
 - 超大请求上那条**通用** `请求有误，请重试` 400（请求体 > 200 万字符时）也接进 too-long 通道，改写成 magpie 认得的「上下文超出长度限制」，让 agent 压缩上下文而不是整轮失败
 - 长对话里开了图片的那一轮不再因为后端漂移就整个失败，用户直接看到回答
+
+## 0.1.25 — 2026-11-05
+
+**图标换成 Loomy 官方 logo（插件卡片 + 供应商两处都换）**
+
+- 来源：Loomy 官网 `https://loomy.xunfei.cn/` 的 `<link rel="icon" href="/icon.png" sizes="1024x1024">`，1024×1024 原图。
+- 之前用的是讯飞开放平台的 `ex` 字标（`magpie.icon`）和客户端 `app.ico` 的 256 档（`src/icon.mjs`），两个都不是 Loomy 自己的形象。
+- 按原图的薄荷绿 `#72E3AD` 把透明四角填成方形，加 28% 圆角（对齐 magpie `.pm-logo` 的 10/36），缩到 256（供应商）/ 128（卡片）。
+- `index.mjs` 的 `auth.icon` 与 `package.json` 的 `magpie.icon` 现在指向同一张官方图。
+
+## 0.1.24 — 2026-11-05
+
+**图标提亮，深色主题下不再发黑**
+
+讯飞官方 favicon 是 `(13,53,82)` 的深蓝，放在 magpie 深色主题的 `--pill` 灰底上几乎看不见（0.1.23 截图里只剩一个影子）。现在把深蓝提到 `#60a5fa`（同色相、提亮），裁掉透明边后等比撑满 96×96，其余不变。
+## 0.1.23 — 2026-11-05
+
+**卡片图标内嵌官方图；`magpie.summary` 补上（按语言的对象）**
+
+- 图标原来是指向 `raw.githubusercontent.com` 的 URL，大陆网络下拉不到、卡片经常空着；
+  现改官方 60×60 图等比放到 128×128 透明画布内嵌为 data URI（3.7 KB），不依赖网络。
+- `magpie.summary` 新增 `{"zh": …, "en": …}`（151 B / 153 B，上限 300）。yetone/magpie#394
+  的 `ownSummary` 读 `map[string]string`，之前没有这个字段，卡片上没有任何一句话。
+
 
 ## 0.1.22 — 2026-11-04
 

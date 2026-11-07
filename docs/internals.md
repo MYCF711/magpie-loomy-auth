@@ -103,7 +103,7 @@ Loomy **没有续期接口**（会话固定 14 天），所以本插件**不伪�
 | `/api/v1/points/records` 每条 debit 带 `consumeSource` + `dailyCycleDate` | 上限的**降级推导**：`quota ≈ dailyBalance + Σ(本业务日 daily 扣分)`。两号实测吻合：0/0 → used 100%；有余额 → 3.96% |
 | 业务日按东八区，重置在次日 00:05 | `resetsAt` 用它；跨日旧上限**作废** |
 | 部分错误是 **HTTP 200 + 信封 `{code:"100002"}`** | 「状态码 ok」不等于成功，一律判业务码；失效时打 `X-Magpie-Sign-In: expired` |
-| deepseek 系模型只认 `<image_base64>` 标记 | `image_url` data URI 会被上游当截断的 base64 文本读，所以只对 deepseek 系改写 |
+| 讯飞自研后端（spark / dashscope）只认 `<image_base64>` 标记 | `image_url` data URI 一投过去就整条 400；标记形态 8 个模型全 200（矩阵见下面「图片格式」一节） |
 | `POST /points/first-login` 幂等，判据是 `alreadyProcessed` | 「今天已领」必须是 `done` 而不是 `claimed` |
 
 ### 新手任务：一次性可领的 1 万分
@@ -223,10 +223,72 @@ E4DPT6  usedCount 0 → 1                       181 activation false → true
 
 ---
 
+## 图片格式：为什么默认走 `<image_base64>` 文本标记
+
+**实测 2026-11-08**：同一张合法的 1×1 PNG，两种投递形态 × 8 个对话模型。
+后端名取自 400 错误体的 `error.metadata.provider_name`：
+
+| model | `image_url` data URI | `<image_base64>` 文本标记 | 后端 |
+|---|---|---|---|
+| DeepSeek-V4.1-Flash | 200（`prompt_tokens` **219**） | 200（`prompt_tokens` **102**） | DeepSeek-V4.1-Flash |
+| GLM-5.3-Flash | 200 | 200 | GLM-5.3-Flash |
+| mimo-v2.5 | 200 | 200 | mimo-v2.5 |
+| MiniMax-M3 | **400** | 200 | spark |
+| qwen-3.8-max | **400** | 200 | spark |
+| Kimi-k2.6 | **400** | 200 | spark |
+| spark-x2.6 | **400** | 200 | spark |
+| qwen3.8-flash | **400** | 200 | dashscope |
+
+两条 400 的完整错误体（原文，只省略了中间的空字段）：
+
+```
+{"error":{"message":"请求有误，请重试；若多次出现请更新应用版本","type":"invalid_request_error",
+          "param":null,"code":400,"metadata":{"provider_name":"iflytek-spark-loomy"}}}
+{"error":{"message":"暂不支持该图片格式，请更换图片后再试","type":"invalid_request_error",
+          "param":null,"code":400,"metadata":{"provider_name":"alibaba-dashscope"}}}
+```
+
+结论三条：
+
+1. **`image_url` 只要落到讯飞自研后端（`iflytek-spark-loomy` / `alibaba-dashscope`），整条请求就 400** ——
+   不是图不合法：换 `<image_base64>` 文本标记立刻 200。
+2. **`<image_base64>` 在全部 8 个模型上都 200** —— 目前唯一「投给谁都不会错」的形态。
+3. **网关的后端路由会漂移** —— 同一个 model 名不一定落同一个后端，所以判据不能只看模型名。
+4. **`image_url` 的 `prompt_tokens`（219）反而高于标记（102）** —— 说明上游把 data URI
+   **真解码成图片 token**，不是当截断的 base64 文本读。**旧结论（2026-10-26「deepseek 系只认标记」）
+   对 DeepSeek-V4.1-Flash 已不成立。**
+
+落地：
+
+- `prefersTagFormat()`（`src/pure.mjs`）按「**已知**不吃 `image_url` 的模型」判，大小写不敏感，
+  并忽略 `group/` 前缀（`group/qwen-3.8-max` 算命中）。清单：
+  `deepseek` / `minimax` / `qwen-3.8-max` / `qwen3.8-flash` / `kimi` / `spark-` / `auto`。
+  **GLM 与 mimo 实测接受 `image_url`，保留原生视觉，不在清单里。**
+  deepseek 那一条由 `DEEPSEEK_PREFERS_TAG` 单独控制（两种形态实测都能过，默认保持标记）。
+- **DeepSeek 为什么必须留原生的**：标记形态把每字节 base64 都算成一个 prompt token。
+  2026-11-08 02:50:52 那次请求有 **32 张图 / 17.1 M 字符 ≈ 400 万 token**（出站 `up_bytes`
+  18,171,522，是历史最大；同期成功的请求只有 0.3~6.1 MB），直接撞爆 1,048,576 的上限，
+  上游回的就是这条通用 400。**把图文本化 = 自己把 token 放大到 8 倍。**
+- **超大请求的通用 400 接进 too-long 通道**（`rewriteTooLongRefusal`）：上面那两句文案
+  在**请求体 > 200 万字符**时按「真超限」处理，改写成 magpie `tooLongRe` 认得的
+  `上下文超出长度限制`，让 agent 压缩上下文而不是整轮失败；小于该阈值仍按瞬时错误 → 502 换号。
+- **兜底重发**（`src/chat.mjs`）：模型名没命中判据、上游却仍回 **400** 且**错误信封的
+  `error.message` 以**上面两句之一**开头**、本次请求体里**确实有 data URI 图片**、
+  且**尚未改写过** → 把同一个 body 转成标记形态**本地重发一次**。
+  判据必须锚定 `error.message` 的开头、且必须是一个真实的错误信封 ——
+  **不许用 `text.includes(文案)`**：用户把报错贴进对话时，body 里就带着这串字，
+  裸匹配会让任何无关的 400 都触发重发，把一个大请求再发一遍、白烧一次额度。
+  同理，body 里**已经含 `<image_base64>`** 时直接不重发（形态已就位，没有第二次可做）。
+  （这是给「后端哪天又变回只吃标记」留的保险）。
+  只重发一次；重发还失败就把第二次的 Response 原样交回（不再加工）。重发后的响应带排障头
+  `x-loomy-image-retry: 1`。读 400 响应体一律走 `clone()`，不改写 / 不重发时原 Response 原样交回。
+
+---
+
 ## 测试
 
 ```bash
-npm test                  # 57 条，全离线、零额度
+npm test                  # 85 条，全离线、零额度
 node tests/live.mjs       # 真实账号 + 真实上游（只读 + 幂等签到，不消费额度）
 ```
 
@@ -240,6 +302,7 @@ node tests/live.mjs       # 真实账号 + 真实上游（只读 + 幂等签到�
 6. `free` 只由厂商声明决定（`rate === 0` 不等于免费）—— 变异后 1 条红
 7. 新手任务按分值排序、`aside` 不参与路由、全领完不画
 8. 邀请码：排除自己/用完/非 active，优先用得最少
+9. 图片形态：已知不吃 `image_url` 的模型走标记（GLM/mimo 保留原生）；因图片格式 400 时**只**重发一次 —— 变异（关掉兜底）后 3 条红
 
 `tests/live.mjs` 在真账号上的当前输出（2026-10-26）：
 

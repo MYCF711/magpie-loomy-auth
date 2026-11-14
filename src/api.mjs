@@ -169,6 +169,9 @@ export async function fetchBalances(session, fetcher = fetch) {
  * 上限 LEDGER_MAX_PAGES 页；翻不满就如实标 partial 并放弃推导（宁缺毋谎）。
  */
 export async function fetchDailyLedger(session, cycleDate, fetcher = fetch) {
+  const dateOf = (r) => (typeof r?.dailyCycleDate === "string" ? r.dailyCycleDate.trim() : "")
+  // 只有 debit + daily 的扣分行才算「今天的消耗」，credit / permanent 行不参与停页判据。
+  const isDailyDebit = (r) => r?.direction === "debit" && r?.consumeSource === "daily"
   let rows = []
   let total = 0
   let complete = false
@@ -185,6 +188,23 @@ export async function fetchDailyLedger(session, cycleDate, fetcher = fetch) {
     rows = rows.concat(list)
     total = readNum(data?.total) ?? rows.length
     if (rows.length >= total || list.length === 0) {
+      complete = true
+      break
+    }
+    // 流水按时间倒序返回，所以「本页出现早于本业务日的 daily 扣分」就等于今天的分已经收全。
+    // 不加这一条，4387 条流水的账号要翻 88 页才 complete，而这里最多 6 页 —— 永远 partial，
+    // 推导永远不发生，卡片就永远写「今日上限未知」（上限因此既不给占比、也让 cap 闸门拒号）。
+    //
+    // ⚠ 但「本页没有今天的行」≠「今天没花分」：旧快照、或跨日时厂商还没滚业务日时，
+    //   首页可能整页都是昨天的行。那种情况直接收尾就会把「未知」写成「今日消耗 0」，
+    //   上限于是被当成当前余额、amount 归零，还会被写回凭据固化一整天。
+    //   所以日期规则收尾必须两边同时成立：
+    //     (a) 已累积的 rows 里真的出现过本业务日的 daily 扣分（证明确实看到了今天）；
+    //     (b) 本页确实出现了早于本业务日的 daily 扣分（倒序证据，证明今天已收全）。
+    //   credit / permanent 行不参与这两个判据 —— 它们既不算今日消耗，也不能替今天作证。
+    const sawToday = rows.some((r) => isDailyDebit(r) && dateOf(r) === cycleDate)
+    const sawOlder = list.some((r) => isDailyDebit(r) && dateOf(r) !== "" && dateOf(r) < cycleDate)
+    if (sawToday && sawOlder) {
       complete = true
       break
     }

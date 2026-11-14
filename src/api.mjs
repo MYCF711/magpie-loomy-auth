@@ -188,6 +188,18 @@ export async function fetchDailyLedger(session, cycleDate, fetcher = fetch) {
       complete = true
       break
     }
+    // 流水按时间倒序返回，所以「本页出现早于本业务日的行」就等于今天的分已经收全。
+    // 不加这一条，4387 条流水的账号要翻 88 页才 complete，而这里最多 6 页 —— 永远 partial，
+    // 推导永远不发生，卡片就永远写「今日上限未知」（上限因此既不给占比、也让 cap 闸门拒号）。
+    if (
+      list.some((r) => {
+        const c = typeof r?.dailyCycleDate === "string" ? r.dailyCycleDate.trim() : ""
+        return c !== "" && c < cycleDate
+      })
+    ) {
+      complete = true
+      break
+    }
   }
   if (!complete) return { partial: true, consumed: 0, latestCycle: undefined }
 

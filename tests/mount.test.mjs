@@ -116,8 +116,9 @@ test("config() 未登录也声明了模型（否则卡片显示 0 models）", as
 
 test("静态表里的上下文是实测值，不是占位（1M 档不许被「保守填小」）", async () => {
   const models = staticModels()
-  assert.equal(models["DeepSeek-V4.1-Flash"].limit.context, 1_048_576)
-  assert.equal(models["DeepSeek-V4.1-Flash"].limit.output, 384_000)
+  // DeepSeek 只认 dated id（裸名 `DeepSeek-V4.1-Flash` 不固定快照，可能落到旧快照）
+  assert.equal(models["deepseek-v4-flash-1017"].limit.context, 1_048_576)
+  assert.equal(models["deepseek-v4-flash-1017"].limit.output, 384_000)
   assert.equal(models["Kimi-k2.6"].limit.context, 262_144)
   assert.ok(models.auto, "auto 也要在（上游有时不下发它）")
 })

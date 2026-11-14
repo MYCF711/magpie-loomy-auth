@@ -69,12 +69,13 @@ Loomy **没有续期接口**（会话固定 14 天），所以本插件**不伪�
 
 ## 模型
 
-10 个 chat 模型（上游还下发 3 条 `type:"image"`，**按类型过滤掉** —— 它们不是
-对话模型，列出来就是让用户选中一个必然失败的东西）。
+**静态兜底 10 个 chat 模型**（实时目录的条数随上游目录变，不写成硬保证；2026-11-15
+实测同一份 raw 过滤后也是 10 条）。上游还会下发 3 条 `type:"image"`，**按类型过滤掉** ——
+它们不是对话模型，列出来就是让用户选中一个必然失败的东西。
 
 | id | context | output | 视觉 | 倍率 |
 |---|---|---|---|---|
-| `DeepSeek-V4.1-Flash` | 1,048,576 | 384,000 | ✓ | x2.0 |
+| `deepseek-v4-flash-1017` | 1,048,576 | 384,000 | ✓ | x2.0 |
 | `spark-x2.6` | 1,048,576 | 131,072 | ✗ | x0.0 |
 | `spark-x` | 1,048,576 | 65,536 | ✗ | x0.0 |
 | `MiniMax-M3` | 1,048,576 | 512,000 | ✓ | x4.0 |
@@ -88,6 +89,13 @@ Loomy **没有续期接口**（会话固定 14 天），所以本插件**不伪�
 以上全部取自一次实测（`GET /api/v1/models`），**不是文档抄的**。
 `context` 原样上报：magpie 把它转给 agent 决定何时压缩对话，而**路由组按
 组内最大值算窗口** —— 一个填小的成员会把整组拉低。
+
+上游目录里 DeepSeek 有**两条不同目录项**：裸名 `DeepSeek-V4.1-Flash`（`created`
+2026-09-14）与 `deepseek-v4-flash-1017`（`created` 2026-10-20），上下文 / 输出 /
+倍率完全一致。裸名不带快照日期，不能用来承诺固定版本；路由组名同样不是快照锁
+（本机用量记录里有其它供应商在 1017 组内返回 `deepseek-v4-flash-ga-260731` 的样本）。
+所以**实时目录（`liveModels`）过滤裸名、静态兜底（`staticModels`）不收录裸名**，
+只上报 dated。`parseModels` 仍通用解析、不在此层过滤（上游裸名行由 `liveModels` 挡掉）。
 
 思考档位来自上游 `reasoning_efforts`：`none|low|medium|high|xhigh`，默认 `low`。
 `auto` 上游没有 thinking_config，因此不声明 reasoning。
@@ -105,6 +113,7 @@ Loomy **没有续期接口**（会话固定 14 天），所以本插件**不伪�
 | 部分错误是 **HTTP 200 + 信封 `{code:"100002"}`** | 「状态码 ok」不等于成功，一律判业务码；失效时打 `X-Magpie-Sign-In: expired` |
 | 讯飞自研后端（spark / dashscope）只认 `<image_base64>` 标记 | `image_url` data URI 一投过去就整条 400；标记形态 8 个模型全 200（矩阵见下面「图片格式」一节） |
 | `POST /points/first-login` 幂等，判据是 `alreadyProcessed` | 「今天已领」必须是 `done` 而不是 `claimed` |
+| `GET /api/v1/models` 对 DeepSeek 同时下发裸名 `DeepSeek-V4.1-Flash` 与 dated `deepseek-v4-flash-1017` 两条目录项 | 只把 dated 列进目录（实时过滤、静态不收录裸名）；裸名不能保证固定版本，magpie 的组名与 `modelSameAs` 只是统计别名，不是快照锁 |
 
 ### 新手任务：一次性可领的 1 万分
 

@@ -92,8 +92,15 @@ for (const key of keys) {
   const ids = Object.keys(models)
   check("目录里有 chat 模型", ids.length >= 10, `${ids.length} 个`)
   check("没有 image 型条目混进来", !ids.includes("Hy-Image-3.5-preview") && !ids.includes("doubao-seedream-5-lite"))
-  const ds = models["DeepSeek-V4.1-Flash"]
-  if (ds) check("DeepSeek 上下文是实测 1M 档", ds.limit.context === 1_048_576, String(ds.limit.context))
+  // DeepSeek 只认 dated id：裸名 `DeepSeek-V4.1-Flash` 不带快照日期，
+  // 不能保证始终拿到 1017，因此不作为固定版本选项。
+  const ds = models["deepseek-v4-flash-1017"]
+  check("目录里有固定的 dated 1017", !!ds)
+  if (ds) {
+    check("DeepSeek dated 上下文是实测 1M 档", ds.limit.context === 1_048_576, String(ds.limit.context))
+    check("DeepSeek dated 出站 id 就是 dated", ds.api?.id === "deepseek-v4-flash-1017", String(ds.api?.id))
+  }
+  check("裸名不在可选目录里（固定版本只认 dated）", !("DeepSeek-V4.1-Flash" in models))
 }
 
 console.log(`\n${failures ? `❌ ${failures} 项不通过` : "✅ 全部通过"}`)

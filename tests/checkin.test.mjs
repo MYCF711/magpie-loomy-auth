@@ -180,7 +180,7 @@ test("静态表里两个 Spark 必须是 free=true（缓存/未登录时也要�
   assert.equal(m["spark-x2.6"].free, true)
   assert.equal(m["spark-x"].free, true)
   assert.equal(m.auto.free, false)
-  for (const id of ["DeepSeek-V4.1-Flash", "MiniMax-M3", "Kimi-k2.6", "qwen-3.8-max", "GLM-5.3-Flash", "qwen3.8-flash", "mimo-v2.5"]) {
+  for (const id of ["deepseek-v4-flash-1017", "MiniMax-M3", "Kimi-k2.6", "qwen-3.8-max", "GLM-5.3-Flash", "qwen3.8-flash", "mimo-v2.5"]) {
     assert.equal(m[id].free, false, `${id} 不该是 free`)
   }
 })

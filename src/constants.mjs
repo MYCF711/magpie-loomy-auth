@@ -41,8 +41,14 @@ export const USAGE_FAIL_TTL_MS = 5_000
  */
 export const USAGE_LEAD_POINTS = 1
 
-/** 推导每日池上限时翻流水的上限（条/页）。 */
-export const LEDGER_PAGE_SIZE = 100
+/**
+ * 推导每日池上限时翻流水的上限（条/页）。
+ * ⚠ 不能是 100：实测上游 `pageSize=100` 返回的是一份**不含当天记录**的旧快照
+ *   （total 比 pageSize≤80 时少掉当天的条数，首页直接跳到昨天），
+ *   于是推导永远看不到今天的扣分、`partial` 也永远为真。
+ *   50 已实测能拿到当天记录。
+ */
+export const LEDGER_PAGE_SIZE = 50
 export const LEDGER_MAX_PAGES = 6
 
 export const SUCCESS_CODE = "000000"

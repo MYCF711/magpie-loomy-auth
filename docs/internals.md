@@ -114,6 +114,40 @@ Loomy **没有续期接口**（会话固定 14 天），所以本插件**不伪�
 | 讯飞自研后端（spark / dashscope）只认 `<image_base64>` 标记 | `image_url` data URI 一投过去就整条 400；标记形态 8 个模型全 200（矩阵见下面「图片格式」一节） |
 | `POST /points/first-login` 幂等，判据是 `alreadyProcessed` | 「今天已领」必须是 `done` 而不是 `claimed` |
 | `GET /api/v1/models` 对 DeepSeek 同时下发裸名 `DeepSeek-V4.1-Flash` 与 dated `deepseek-v4-flash-1017` 两条目录项 | 只把 dated 列进目录（实时过滤、静态不收录裸名）；裸名不能保证固定版本，magpie 的组名与 `modelSameAs` 只是统计别名，不是快照锁 |
+| `/chat/completions` 必须带 `traceparent`（W3C 形态）+ `ChatId`/`MsgId`/`TurnId`/`InvokeOrigin`/`X-Loomy-Request-Purpose`/`loomy-version` | 官方客户端 0.9.39 源码注释原文：缺 `traceparent` 时请求会挂死直到超时。本插件在 `chatFetch` 里补全，见下面「聊天请求的协议面」 |
+
+### 聊天请求的协议面（逆向自官方客户端 0.9.39）
+
+取证链条：`Loomy-Setup-0.9.39.exe`（`https://static-res.xfinfr.com/loomy/win/latest.yml`）
+→ 7-Zip 解 NSIS → `$PLUGINSDIR/app-64.7z` → `resources/app.asar`
+→ `electron/utils/request-headers.js`（`buildRequestHeaders`）、
+`electron/utils/request-purpose.js`、`electron/utils/app-version.js`、
+`electron/llm/llm-completion.js`（真正发请求那段）。
+
+官方客户端对 `/chat/completions` 发的头：
+
+| 头 | 形态 / 取值 | 说明 |
+|---|---|---|
+| `Authorization` | `Bearer <session>` | 与业务接口同一个 session |
+| `token` | `<session>` | `useSessionAuth` 为真时**额外**再给一条（不是二选一） |
+| `Accept` / `Content-Type` | `application/json` | — |
+| `traceparent` | `00-<32hex>-<16hex>-01` | **必带**；缺了上游会挂住直到超时 |
+| `ChatId` | `chat-<uuid>` | 会话标识；同一会话多轮相同 |
+| `MsgId` / `TurnId` | `msg-<uuid>` | 消息标识；官方在可用时两者同值 |
+| `InvokeOrigin` | `user` / `system` | 用户主动 `user`；后台子调用才 `system` |
+| `X-Loomy-Request-Purpose` | `chat.message` 等 17 个协议值 | 服务端裁决层按用途判定；缺了就没有用途声明 |
+| `loomy-version` | 客户端版本，如 `0.9.39` | 取自 `app.getVersion()` |
+
+实现：`src/tracing.mjs`（生成）+ `src/chat.mjs`（只对 `/chat/completions` 注入）。
+`ChatId` 由 magpie 的 `sessionID`（`chat.headers` 钩子写在 `x-loomy-session` 里）经
+sha256 推出，因此**同一会话跨轮稳定**，而 `x-loomy-session` 本身不外发 ——
+官方客户端没有这个头。
+
+⚠ 这些头**不改变上游容量**。2026-11-18 的「首字 100 秒+ / 504 延迟未开始 / 503
+该模型服务暂时不可用」是 Loomy 侧 1017 后端拥塞：同期同账号实测
+`deepseek-v4-flash-1017` 首字 12~144 秒（历史中位数 4~5 秒），而 GLM-5.3-Flash
+仍 26 秒、MiniMax-M3 15 秒。协议补全解决的是「请求形状不像官方客户端」，
+不是「上游变快」。
 
 ### 新手任务：一次性可领的 1 万分
 

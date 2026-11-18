@@ -98,6 +98,16 @@ export const CLIENT_DEVICE_ID = "web"
 export const CLIENT_UA = "Loomy|Desktop|Electron|macOS"
 export const CLIENT_VERSION = "1.0.0"
 
+/**
+ * 聊天请求的 `loomy-version` —— 逆向自**官方客户端 0.9.39**（2026-10-10 发布）。
+ *
+ * ⚠ 与 `CLIENT_VERSION` 分开：那个是账号签名体里的 `base.version`（业务接口），
+ *   这个只出现在 `/chat/completions` 的 `loomy-version` 头里，官方填的是
+ *   Electron `app.getVersion()`（= 客户端版本号）。
+ *   客户端升级后这里要跟着改；改错不会报错，只会让上游看到的客户端版本对不上。
+ */
+export const LOOMY_CHAT_VERSION = "0.9.39"
+
 function trim(v) {
   return typeof v === "string" ? v.trim().replace(/\/+$/, "") : ""
 }

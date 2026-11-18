@@ -3,6 +3,15 @@
 > 每个版本一节，**一条一行**，说用户能感知的变化。
 > 格式与发布流程见 [magpie-plugin-scaffold](https://github.com/MYCF711/magpie-plugin-scaffold) 的 [UPDATING.md](https://github.com/MYCF711/magpie-plugin-scaffold/blob/main/UPDATING.md)。
 
+## 0.1.28 — 2026-11-18
+
+**聊天请求补齐官方客户端的追踪头（挂起 / 首字极慢 / 504 延迟未开始）**
+
+- 逆向官方客户端 0.9.39（`app.asar` 的 `electron/utils/request-headers.js` 与 `electron/llm/llm-completion.js`）：`/chat/completions` **必带** `traceparent`，官方源码注释原文是「缺 traceparent 时会挂死直到超时」
+- 现在按官方取值补齐 `traceparent` / `ChatId` / `MsgId` / `TurnId` / `InvokeOrigin` / `X-Loomy-Request-Purpose` / `loomy-version`；`ChatId` 由 magpie 会话 id 派生，同一会话跨轮稳定
+- 本插件自己造的 `x-loomy-session` 不再发往上游（官方客户端没有这个头），只用来推导 `ChatId`
+- ⚠ 这是**协议对齐**，不会让上游拥塞变快：2026-11-18 同时段实测 `deepseek-v4-flash-1017` 首字 12~144 秒（历史中位数 4~5 秒），而 GLM-5.3-Flash 26 秒、MiniMax-M3 15 秒 —— 503「该模型服务暂时不可用」的直接来源仍是 Loomy 侧 1017 后端容量
+
 ## 0.1.27 — 2026-11-15
 
 **今日额度恢复成「N / M 积分」；DeepSeek 菜单只留固定快照**

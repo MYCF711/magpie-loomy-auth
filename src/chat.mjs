@@ -21,6 +21,7 @@
 
 import { _pure } from "./pure.mjs"
 import { CHAT_TIMEOUT_MS, CLIENT_UA, ERROR_CODES } from "./constants.mjs"
+import { chatTracingHeaders } from "./tracing.mjs"
 import { exhausted } from "./usage.mjs"
 
 const { businessCode, isAuthErrorCode, prefersTagFormat, rewriteImagesToTags } = _pure
@@ -67,22 +68,46 @@ export async function chatFetch({ input, init, credential, session, usageValue }
     }
   }
 
-  const incoming = new Headers(request ? request.headers : init?.headers)
-  // `user-agent` 必须进跳过名单：magpie 递给插件的是它自己的 `magpie/<version>`，
-  // 原样转发就是这个插件在替「第三方客户端」投标（上游网关按 `<product>/<version>` 认人，
-  // 命中即 403 TM.00000001）。下面统一换成官方 Loomy 客户端的 UA。
-  for (const key of ["authorization", "x-api-key", "token", "content-length", "host", "user-agent"]) incoming.delete(key)
-  incoming.set("token", session)
-  incoming.set("Authorization", `Bearer ${session}`)
-  incoming.set("user-agent", CLIENT_UA)
-  if (bodyText) incoming.set("Content-Type", "application/json")
-
   // 重发与首发必须用**完全相同**的 headers / method / signal —— 只换 body。
   // signal 在这里先定下来（不留在 fetch 参数里），否则重发会各自造一个新的超时。
   const method = init?.method ?? request?.method ?? "POST"
   const callerSignal = init?.signal ?? request?.signal ?? null
   const signal = callerSignal ?? AbortSignal.timeout(CHAT_TIMEOUT_MS)
   const target = request ? request.url : url
+
+  const incoming = new Headers(request ? request.headers : init?.headers)
+  // `user-agent` 必须进跳过名单：magpie 递给插件的是它自己的 `magpie/<version>`，
+  // 原样转发就是这个插件在替「第三方客户端」投标（上游网关按 `<product>/<version>` 认人，
+  // 命中即 403 TM.00000001）。下面统一换成官方 Loomy 客户端的 UA。
+  //
+  // `x-loomy-session` 是本插件**自己**在 `chat.headers` 钩子里加的会话关联头，
+  // 官方客户端没有这个头 —— 不上游，只借它推 `ChatId`（同一会话同一个值）。
+  const magpieSession = incoming.get("x-loomy-session") ?? ""
+  for (const key of [
+    "authorization",
+    "x-api-key",
+    "token",
+    "content-length",
+    "host",
+    "user-agent",
+    "x-loomy-session",
+  ]) {
+    incoming.delete(key)
+  }
+  incoming.set("token", session)
+  incoming.set("Authorization", `Bearer ${session}`)
+  incoming.set("user-agent", CLIENT_UA)
+  if (bodyText) incoming.set("Content-Type", "application/json")
+
+  // 官方客户端 0.9.39 的追踪头（逆向见 `src/tracing.mjs` 顶部）：
+  // traceparent **必带**，缺了上游会挂住直到超时；ChatId/MsgId/TurnId/InvokeOrigin/
+  // X-Loomy-Request-Purpose/loomy-version 同属一条请求的协议面。
+  // 只给 `/chat/completions` 加 —— 生图/embedding 不是这套契约。
+  if (/\/chat\/completions\/?$/.test(target)) {
+    for (const [key, value] of Object.entries(chatTracingHeaders({ sessionId: magpieSession }))) {
+      incoming.set(key, value)
+    }
+  }
   const sendOnce = (body) =>
     fetch(target, { ...(init ?? {}), method, headers: incoming, body: body || undefined, signal })
 

@@ -149,6 +149,43 @@ sha256 推出，因此**同一会话跨轮稳定**，而 `x-loomy-session` 本�
 仍 26 秒、MiniMax-M3 15 秒。协议补全解决的是「请求形状不像官方客户端」，
 不是「上游变快」。
 
+### 2026-11-20 上游变化（「转云端 agent」那次）实测
+
+**不是客户端升级**：`latest.yml` 仍是 `0.9.39`（sha512 与 2026-10-10 那次一致），
+`/download` 页也没有更新的包；本地 `app.asar` 与线上构建是同一份。
+变化发生在服务端，而且没有新增端点（`/api/v1/agent/*` 全部 404），
+`/api/v1/chat/completions` 仍是 OpenAI 兼容接口、鉴权仍是 session。
+
+目录与计费：
+
+- 目录里列出的对话模型从 10 条缩到 **6 条**（`spark-x2.6` / `DeepSeek-V4.1-Flash` /
+  `deepseek-v4-flash-1017` / `GLM-5.3-Flash` / `qwen3.8-flash` / `auto`）；
+  `spark-x`、`MiniMax-M3`、`Kimi-k2.6`、`qwen-3.8-max`、`mimo-v2.5` 从目录消失，
+  但**仍可调用**（同一天逐个实测 200）。
+- **`Spark-X2.6` 不再免费**：展示名 `(x2.5)`，而且是上游默认模型
+  （`is_default_model` / `is_default_small_model` 都为 true）。静态表已跟着改。
+- `/api/v1/models` 新增顶层 `reasoning_enabled` / `reasoning_catalog_version`，
+  每条新增 `is_default_model` / `is_default_small_model`。
+
+错误形态（这是「插件用不了」的真正来源）：
+
+- `503` + `{"error":{"type":"no_provider_error","metadata":{"provider_name":"venus"}}}`
+  —— 该模型的可调度实例为 0，**不是鉴权失败**（鉴权失败是 `100002` / 401）。
+  实测 130~330ms 就返回，是快速拒绝而非超时。
+- 有时是 `openresty/1.15.8.2` 的 `504 Gateway Time-out`（约 150 秒后）。
+- 同一时段同一账号，请求耗时在 1.6 秒 ~ 150 秒之间随机跳动；串行与并发都复现，
+  换模型也一样（`auto` 会落到当时可用的那个）。
+
+工具与提示词（用户关心的两点）：
+
+- **工具调用可用**：带 `tools` 的请求返回 `finish_reason: "tool_calls"`，
+  `tool_calls[0].function.name` 就是客户端声明的工具名（实测 `bash`，
+  参数原样回传给客户端执行）。**服务端不替你执行工具**。
+- **基础模型没有 Loomy 人设**：问「你是谁」直接答「我是科大讯飞研发的…讯飞星火」，
+  没有「Loomy 办公助手」那一套。官方那套「灵魂提示词」是**客户端本地**注入的
+  （`opencode-home-template` 的 agent prompt），第三方走 `/chat/completions`
+  拿到的就是裸模型 —— 想「剥离官方提示词」不需要做任何事，本来就没有。
+
 ### 新手任务：一次性可领的 1 万分
 
 Loomy 还有第三笔额度 —— **新手任务奖励**，总计 10,000 分，可主动领取：

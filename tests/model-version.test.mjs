@@ -148,7 +148,7 @@ test("静态表：改 DeepSeek 不许顺手动别的条目（回归护栏）", (
   for (const id of others) assert.ok(models[id], `静态表少了 ${id}`)
   assert.ok(Object.keys(models).length >= 10, `模型太少：${Object.keys(models).length}`)
   assert.equal(models["Kimi-k2.6"].limit.context, 262_144)
-  assert.equal(models["spark-x2.6"].free, true, "x0.0 / 限时免费 必须仍是 free")
+  assert.equal(models["spark-x2.6"].free, false, "2026-11-20 起 Spark-X2.6 是 x2.5 收费（上游默认模型），标免费会让 Free-first 白烧积分")
   assert.equal("Hy-Image-3.5-preview" in models, false, "image 型条目不许进对话目录")
 })
 

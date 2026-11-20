@@ -1,7 +1,15 @@
 // Loomy · 模型目录（静态兜底表 + 实测拉取）
 //
 // ⚠ 静态表里的数字**全部来自实测**（`GET /api/v1/models`，2026-10-26；
-//   DeepSeek dated 条目复核于 2026-11-15），不是照抄文档，也不是「看起来差不多」：
+//   DeepSeek dated 条目复核于 2026-11-15；倍率与「哪些还在目录里」复核于 2026-11-20），
+//   不是照抄文档，也不是「看起来差不多」：
+//
+//   ⚠ 2026-11-20 上游目录变化（实测）：Spark-X2.6 从「限时免费 x0.0」变成 **x2.5 收费**，
+//     并且成了上游的默认模型（`is_default_model` / `is_default_small_model`）；
+//     目录里不再列出 `spark-x` / `MiniMax-M3` / `Kimi-k2.6` / `qwen-3.8-max` / `mimo-v2.5`
+//     —— 但它们**仍可调用**（同一天实测逐个 200），所以静态表继续保留，只在兜底时出现。
+//     目录当前列出的对话模型只有 5 个：spark-x2.6 / DeepSeek 两条 / GLM-5.3-Flash /
+//     qwen3.8-flash / auto（其中 DeepSeek 只保留 dated 一条，见下）。
 //
 //   id                      context  output   efforts                      reason   vision   tools
 //   spark-x2.6              1048576  131072   none|low|medium|high|xhigh   ✓        ✗        ✓
@@ -65,7 +73,7 @@ const DEEPSEEK_DATED_ID = "deepseek-v4-flash-1017"
 
 /** 实测快照：[id, 展示名, context, output, 有无视觉, 有无工具]，efforts 统一为上游那 5 档 */
 const SNAPSHOT = [
-  ["spark-x2.6", "Spark-X2.6 正式版(限时免费)", 1_048_576, 131_072, false, true],
+  ["spark-x2.6", "Spark-X2.6 正式版", 1_048_576, 131_072, false, true],
   ["spark-x", "Spark-X2.5（限时免费）", 1_048_576, 65_536, false, true],
   [DEEPSEEK_DATED_ID, "DeepSeek V4.1 Flash 1017", 1_048_576, 384_000, true, true],
   ["MiniMax-M3", "MiniMax M3", 1_048_576, 512_000, true, true],
@@ -79,14 +87,17 @@ const SNAPSHOT = [
 const EFFORTS = ["none", "low", "medium", "high", "xhigh"]
 
 /**
- * 实测倍率（取自上游展示名尾部，2026-10-26）。
+ * 实测倍率（取自上游展示名尾部；2026-10-26 首测，2026-11-20 复核）。
  *
  * ⚠ 这个表**只用于静态兜底**；活目录走 `parseModels`，倍率从上游直接解析。
- * 两个「限时免费」的 Spark 是 `x0.0` —— 也就是不扣积分，必须能被
- * `isFreeModel` 判成免费，否则它们会被当成收费模型、拿不到 Free first 的优先派发。
+ *
+ * ⚠ **2026-11-20 起 Spark-X2.6 不再免费**：展示名从 `(限时免费)(x0.0)` 变成 `(x2.5)`，
+ *   而且它成了上游的默认模型。这里必须跟着改 —— 静态表若还标 `free: true`，
+ *   magpie 的 Free-first 路由会把它当成零成本优先派发，用户以为免费却在烧积分。
+ *   现在只有 `spark-x` 仍是 `x0.0`。
  */
 const RATE_HINT = {
-  "spark-x2.6": "(x0.0)",
+  "spark-x2.6": "(x2.5)",
   "spark-x": "(x0.0)",
   [DEEPSEEK_DATED_ID]: "(x2.0)",
   "MiniMax-M3": "(x4.0)",

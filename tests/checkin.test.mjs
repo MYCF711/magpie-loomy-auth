@@ -175,10 +175,11 @@ test("parseModels 把 free 从上游展示名解析出来", () => {
   assert.equal(by["auto"].free, false)
 })
 
-test("静态表里两个 Spark 必须是 free=true（缓存/未登录时也要对）", () => {
+test("静态表里的免费标记必须跟上游一致（2026-11-20 起 Spark-X2.6 已收费）", () => {
   const m = staticModels()
-  assert.equal(m["spark-x2.6"].free, true)
+  // spark-x 仍是 x0.0；Spark-X2.6 从 x0.0 变成 x2.5，不再是免费
   assert.equal(m["spark-x"].free, true)
+  assert.equal(m["spark-x2.6"].free, false, "Spark-X2.6 已改 x2.5，标成免费会让 Free-first 路由白烧积分")
   assert.equal(m.auto.free, false)
   for (const id of ["deepseek-v4-flash-1017", "MiniMax-M3", "Kimi-k2.6", "qwen-3.8-max", "GLM-5.3-Flash", "qwen3.8-flash", "mimo-v2.5"]) {
     assert.equal(m[id].free, false, `${id} 不该是 free`)

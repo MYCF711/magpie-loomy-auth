@@ -3,6 +3,23 @@
 > 每个版本一节，**一条一行**，说用户能感知的变化。
 > 格式与发布流程见 [magpie-plugin-scaffold](https://github.com/MYCF711/magpie-plugin-scaffold) 的 [UPDATING.md](https://github.com/MYCF711/magpie-plugin-scaffold/blob/main/UPDATING.md)。
 
+## 0.1.29 — 2026-11-20
+
+**跟上 2026-11-20 的上游变化：Spark-X2.6 不再免费；补齐「转云端 agent」的排障判据**
+
+- `Spark-X2.6` 从「限时免费 x0.0」变成 **x2.5 收费**，并且成了上游默认模型
+  （`is_default_model` / `is_default_small_model`）。静态兜底表原本把它标成
+  `free: true`，会让 magpie 的 Free-first 路由把它当零成本优先派发 —— 用户以为免费却在烧积分。
+  现在只有 `spark-x` 还是 `x0.0`。
+- 目录里不再列出 `spark-x` / `MiniMax-M3` / `Kimi-k2.6` / `qwen-3.8-max` / `mimo-v2.5`，
+  但它们**仍可调用**（同一天逐个实测 200），静态表继续保留，只在兜底时出现。
+- 文档补了这次「转云端 agent」的实测结论（`docs/internals.md`「2026-11-20 上游变化」+
+  `AGENTS.md` 坑表第 20 条）：**没有新客户端**（`latest.yml` 仍 0.9.39）、**没有新端点**
+  （`/api/v1/agent/*` 全 404）；随机 503 的 body 是
+  `{"error":{"type":"no_provider_error","metadata":{"provider_name":"venus"}}}`，
+  是上游可调度实例为 0，不是鉴权；工具调用照常可用（`finish_reason: tool_calls`），
+  基础模型也没有 Loomy 人设（它自称讯飞星火），所以没有官方提示词需要剥离。
+
 ## 0.1.28 — 2026-11-18
 
 **聊天请求补齐官方客户端的追踪头（挂起 / 首字极慢 / 504 延迟未开始）**

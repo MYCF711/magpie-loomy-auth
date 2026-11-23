@@ -30,8 +30,8 @@
       判据：claimed / done / ineligible / inactive / captcha / failed —— 没有 "success"
       出处：internals 同上
 
-□ 6. 热路径用 /points/balance
-      判据：额度读数不拖慢卡片（那个端点只回 3 个数字）
+□ 6. 个人热路径用 /points/balance；团队模式用 identity + team-points/balance
+      判据：只读、按账号缓存；团队模式不查个人账本，也不把个人余额当团队额度
       出处：internals 协议要点
 
 □ 7. first-login 的「今天已领」判据是 done
@@ -66,6 +66,12 @@
             官方是网页的是完整 Chrome UA，有 App / CLI 客户端的是那个客户端的 UA；
             loader 的 `fetch` 包装里 `"user-agent"` 在跳过名单内、由插件补官方值
       出处：模板坑表第 38 条 · scripts/check-ua.mjs
+
+□ 15. 团队共享池与成员每日限额分开显示，任一耗尽均正确参与路由
+      判据：node --test tests/team-usage.test.mjs 全绿；共享池没有虚构的每日重置或比例，团队上限不覆盖个人签到凭据
+
+□ 16. 身份开关实际切换服务端身份，切到哪个就显示哪个钱包
+      判据：node --test tests/team-mode.test.mjs 全绿；开关置顶、使用点实时读取，切换后校验并清缓存，usage 没有 POST
 ```
 
 ---

@@ -43,7 +43,9 @@ export async function chatFetch({ input, init, credential, session, usageValue }
   if (usageValue && exhausted(usageValue)) {
     return jsonResponse(429, {
       error: {
-        message: "Loomy 积分已耗尽（今日额度与永久积分均为 0），请签到或更换账号",
+        message: usageValue._team
+          ? "Loomy 团队积分或今日团队额度已耗尽，请等待额度恢复或切换账号"
+          : "Loomy 积分已耗尽（今日额度与永久积分均为 0），请签到或更换账号",
         type: "rate_limit_error",
         code: ERROR_CODES.rateLimited,
         status: 429,

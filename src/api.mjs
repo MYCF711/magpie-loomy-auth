@@ -161,6 +161,30 @@ export async function fetchBalances(session, fetcher = fetch) {
   return { permanent, daily, total }
 }
 
+/** 当前团队由服务端的账号上下文决定，不能从个人钱包或 isInternal 猜。 */
+export async function fetchTeamIdentity(session, fetcher = fetch) {
+  const data = await fetchTeamContext(session, fetcher)
+  const id = typeof data.currentTeamId === "string" ? data.currentTeamId.trim() : ""
+  if (!id) return null
+  const team = Array.isArray(data.teams) ? data.teams.find((row) => row?.teamId === id) : undefined
+  return { id, name: typeof team?.name === "string" ? team.name.trim() : "" }
+}
+
+/** 成员资格与当前身份分开读取；个人模式下仍可有已加入的团队。 */
+export async function fetchTeamContext(session, fetcher = fetch) {
+  return tokenRequest("GET", "/api/v1/user/identity", session, undefined, "团队身份查询", fetcher)
+}
+
+/** 团队共享余额与当前成员的每日额度；只读，不切换团队。 */
+export async function fetchTeamBalances(session, fetcher = fetch) {
+  return tokenRequest("GET", "/api/v1/team-points/balance", session, undefined, "团队积分查询", fetcher)
+}
+
+/** 只用于用户选择身份时；空 teamId 切个人，非空选择已加入的团队。 */
+export async function setCurrentTeam(session, teamId, fetcher = fetch) {
+  return tokenRequest("POST", "/api/v1/user/current-team", session, teamId ? { teamId } : {}, "切换积分身份", fetcher)
+}
+
 /**
  * 从流水推今天的 daily 消耗（降级路径，只在凭据里没有当天 quota 时用）。
  *

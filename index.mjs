@@ -73,10 +73,14 @@ import { readDesktopSession, readAllLoomySessions, readAllLoomyAccounts } from "
 import { staticModels, liveModels } from "./src/models.mjs"
 import { readUsage, publicUsage, quotaToRemember, clearUsageCache } from "./src/usage.mjs"
 import { chatFetch } from "./src/chat.mjs"
+import { createTeamModeController } from "./src/team-mode.mjs"
 
 const API_URL = `${INTEGRATION_BASE}/api/v1`
 
-export const LoomyAuthPlugin = async ({ client } = {}) => {
+export const LoomyAuthPlugin = async ({ client, magpie } = {}) => {
+  const teamMode = magpie?.option ? createTeamModeController({
+    readOption: () => magpie.option(PROVIDER, "team_mode") === true,
+  }) : null
   const log = (message, level = "info") => {
     try {
       client?.app?.log?.({ service: "loomy", level, message })
@@ -251,6 +255,7 @@ export const LoomyAuthPlugin = async ({ client } = {}) => {
       provider: PROVIDER,
       icon: ICON,
       maxConcurrency: 4,
+      get options() { return teamMode?.options() ?? [] },
       // Loomy 没有续期接口；这个值只影响 magpie 何时「尝试」续期，
       // 而 refresh 恒返回 undefined，所以不会真的去续。
       refreshLead: 60_000,
@@ -449,7 +454,7 @@ export const LoomyAuthPlugin = async ({ client } = {}) => {
         const usage = publicUsage(value)
         // 新手任务：一次性可领的 1 万分，只做 aside 展示（不参与路由）。
         // ⚠ 单独缓存 10 分钟 —— 它是另一个端点，而 usage 会被频繁刷新。
-        const extra = await onboardingWindowFor(credential)
+        const extra = value._team ? undefined : await onboardingWindowFor(credential)
         if (extra) usage.windows = [...(usage.windows ?? []), extra]
         return usage
       },
@@ -544,6 +549,20 @@ export const LoomyAuthPlugin = async ({ client } = {}) => {
         const fallback = staticModels()
         const credential = _pure.credentialOf(auth)
         if (!credential) return fallback
+
+        // Magpie 拨动 provider 开关只会调用 models；不要在 usage 里切换身份。
+        if (teamMode) {
+          try {
+            if (await teamMode.sync(credential)) {
+              clearUsageCache()
+              catalog.delete(credential.session)
+            }
+          } catch (error) {
+            clearUsageCache()
+            catalog.delete(credential.session)
+            throw error
+          }
+        }
 
         const hit = catalog.get(credential.session)
         if (hit && Date.now() - hit.at < CATALOG_TTL_MS) return hit.models

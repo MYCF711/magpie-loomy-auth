@@ -147,7 +147,7 @@ Loomy **没有续期接口**（会话固定 14 天），所以本插件**不伪�
 ### 在 Magpie 内实际切换身份
 
 `auth.options` 只支持布尔开关，拨动后只重拉 `provider.models`、不重跑工厂或 loader。
-因此 `team_mode`（「积分账户」，`placement: "top"`）在 `models` 的缓存命中
+因此 `team_mode`（「积分账户」，`placement: "accounts"`，账号卡片内）在 `models` 的缓存命中
 之前实时读取，通过 `src/team-mode.mjs` 执行切换；不新增登录方式，不在 `usage` 中写服务端。
 
 - `auth.options` 为动态 getter：仅 identity 的 `teams` 中存在 active 成员资格时返回设置。当前为个人不等于未加入团队。

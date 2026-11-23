@@ -17,7 +17,7 @@ export function createTeamModeController({ readOption }) {
       labels: { en: "Credit account", "zh-TW": "積分帳戶", ja: "ポイントアカウント", de: "Guthabenkonto" },
       offLabels: { en: "Personal", "zh-TW": "個人", ja: "個人", de: "Persönlich" },
       onLabels: { en: "Team", "zh-TW": "團隊", ja: "チーム", de: "Team" },
-      default: !!account.current, placement: "top", immediate: true,
+      default: !!account.current, placement: "accounts", immediate: true,
     }]
   }
   async function apply(credential, key, fetcher) {

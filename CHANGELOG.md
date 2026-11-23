@@ -3,6 +3,10 @@
 > 每个版本一节，**一条一行**，说用户能感知的变化。
 > 格式与发布流程见 [magpie-plugin-scaffold](https://github.com/MYCF711/magpie-plugin-scaffold) 的 [UPDATING.md](https://github.com/MYCF711/magpie-plugin-scaffold/blob/main/UPDATING.md)。
 
+## 0.1.33 — 2026-11-23
+
+- 将个人 / 团队选择移到账号卡片内的额度下方。
+
 ## 0.1.32 — 2026-11-23
 
 - 积分账户直接选择「个人 / 团队」，在支持即时选项的 Magpie 中点选即切换并刷新额度，无须保存。

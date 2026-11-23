@@ -54,7 +54,7 @@ curl -s "https://usemagpie.ai/api/latest?channel=stable" | grep -o '"version":"[
 | 3 | 两池都空的号仍然排在最前面 | 必须**合成一条 `used: 100` 的参与路由窗口**把它压到底；不画窗口 = 继续以 0% 排第一 | internals 同上 |
 | 4 | 界面上额度占比是编的 | 今日上限未知时 → `aside` + `used: 0`，显示「N 积分剩余（今日上限未知）」。宁可降级也不谎报占比 | internals 同上 |
 | 5 | 签到界面出现「签到失败 · 每日赠送积分已刷新」这种自相矛盾的行 | `outcome` 必须是契约六值之一（`claimed`/`done`/`ineligible`/`inactive`/`captcha`/`failed`）。返回 `"success"` 会被归为 failed **但保留 message** | internals 同上 |
-| 6 | 额度读数慢、拖慢整张卡片 | 热路径用 `/api/v1/points/balance` —— 它只回 3 个数字，实测 61~233ms，是三家现有插件都没用的最小端点 | internals 协议要点 |
+| 6 | 额度读数慢、拖慢整张卡片 | 个人热路径用 `/api/v1/points/balance`；团队模式用 `identity` + `team-points/balance` 并按账号缓存，不翻个人流水 | internals 协议要点 |
 | 7 | 「今天已领」被显示成「刚领到」 | `POST /points/first-login` 幂等，判据是 `alreadyProcessed`；「今天已领」必须是 `done`，不是 `claimed` | internals 协议要点 |
 | 8 | 频繁刷新把上游打烦 / 触发限流 | token 刷新要**节流**，不能每次都打 | internals 协议要点 |
 | 9 | 邀请奖励的数字对不上 | 实测邀请双方**各得 5000**，不是 2000 | internals 协议要点 |
@@ -70,9 +70,15 @@ curl -s "https://usemagpie.ai/api/latest?channel=stable" | grep -o '"version":"[
 | 19 | **聊天请求首字几十秒、`504 延迟未开始`、偶发 `503 该模型服务暂时不可用`**；抓包看请求「什么错都没有，就是很慢」 | 官方客户端 0.9.39 对 `/chat/completions` 必带 `traceparent`（W3C `00-<32hex>-<16hex>-01`）+ `ChatId`/`MsgId`/`TurnId`/`InvokeOrigin`/`X-Loomy-Request-Purpose`/`loomy-version`，官方源码注释写明**缺 traceparent 会挂死**。判据：`node tests/chat-tracing.test.mjs` 全绿，且真实请求带 `loomy-version` 头。⚠ 补头是协议对齐，**不会让上游拥塞变快** —— 2026-11-18 的 503 是 1017 后端容量问题（同时段 GLM 26s、MiniMax 15s，只有 1017 要 12~144s） | `src/tracing.mjs` · internals「聊天请求的协议面」 |
 | 20 | **「Loomy 转云端 agent 后插件全废了」**：请求随机 503 / 150 秒后 504 / 首字几十秒，看起来像插件坏了 | 先看 503 的 body：`{"error":{"type":"no_provider_error","metadata":{"provider_name":"venus"}}}` 或 `openresty` 的 `504 Gateway Time-out` ⇒ **上游可调度实例为 0 或网关超时**，不是鉴权（鉴权失败是 `100002`/401）。判据：同时段换模型对照即可（2026-11-20 实测 1017 有时 1.6s 有时 150s，`auto` 会落到当时可用的那个）。⚠ 该次「更新」**没有新客户端**（`latest.yml` 仍 0.9.39）也**没有新端点**（`/api/v1/agent/*` 全 404）；工具调用仍可用（`finish_reason: tool_calls`），基础模型也没有 Loomy 人设（它自称讯飞星火） | `docs/internals.md`「2026-11-20 上游变化」 |
 
+| 21 | 团队账号卡片显示个人余额，个人钱包空时误挡企业请求 | 先读服务端 `currentTeamId`，共享池与成员每日限额独立显示；任一耗尽参与路由，团队上限不覆盖个人签到凭据。判据：`node --test tests/team-usage.test.mjs` | internals「团队身份、共享池与成员每日额度」 |
+
 ---
 
 ## 三、命令
+
+团队模式判据：`node --test tests/team-usage.test.mjs`。先查服务端 `currentTeamId`，
+共享池与成员每日额度独立显示；查询失败不回退个人钱包，共享池没有每日重置。
+团队上限不能写回个人 `dailyQuota`。详见 internals「团队身份、共享池与成员每日额度」。
 
 ```bash
 # 合规检查（脚手架里的脚本，指到本仓库）

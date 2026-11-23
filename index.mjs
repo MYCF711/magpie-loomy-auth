@@ -449,7 +449,7 @@ export const LoomyAuthPlugin = async ({ client } = {}) => {
         const usage = publicUsage(value)
         // 新手任务：一次性可领的 1 万分，只做 aside 展示（不参与路由）。
         // ⚠ 单独缓存 10 分钟 —— 它是另一个端点，而 usage 会被频繁刷新。
-        const extra = await onboardingWindowFor(credential)
+        const extra = value._team ? undefined : await onboardingWindowFor(credential)
         if (extra) usage.windows = [...(usage.windows ?? []), extra]
         return usage
       },

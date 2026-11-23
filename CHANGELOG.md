@@ -3,6 +3,12 @@
 > 每个版本一节，**一条一行**，说用户能感知的变化。
 > 格式与发布流程见 [magpie-plugin-scaffold](https://github.com/MYCF711/magpie-plugin-scaffold) 的 [UPDATING.md](https://github.com/MYCF711/magpie-plugin-scaffold/blob/main/UPDATING.md)。
 
+## 0.1.30 — 2026-11-23
+
+- 显示 Loomy 当前团队名称、团队共享剩余积分和当前成员每日剩余 / 上限；未选团队时保留个人钱包显示。
+- 按团队共享池和成员每日额度判断耗尽，不再用个人钱包误拦团队请求，也不把每日限额重置误报为团队充值。
+- 保持团队额度查询只读、按账号缓存；缺字段 / 团队切换中的读数报未知或错误，跨业务日不沿用昨日已耗尽的缓存。
+
 ## 0.1.29 — 2026-11-20
 
 **跟上 2026-11-20 的上游变化：Spark-X2.6 不再免费；补齐「转云端 agent」的排障判据**

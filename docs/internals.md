@@ -37,7 +37,7 @@ const group = (w) => w.used >= 98 ? "spent" : w.used >= 90 ? "low" : "fine"
 | 其中命中余额为 0 的那个号 | **255 次** |
 | 带失败迹象 | 11 次，含 `Loomy: 积分余额不足，请获取积分后再试` |
 
-本插件的上报口径：
+本插件的个人模式上报口径：
 
 | | 上报方式 | 理由 |
 |---|---|---|
@@ -115,6 +115,34 @@ Loomy **没有续期接口**（会话固定 14 天），所以本插件**不伪�
 | `POST /points/first-login` 幂等，判据是 `alreadyProcessed` | 「今天已领」必须是 `done` 而不是 `claimed` |
 | `GET /api/v1/models` 对 DeepSeek 同时下发裸名 `DeepSeek-V4.1-Flash` 与 dated `deepseek-v4-flash-1017` 两条目录项 | 只把 dated 列进目录（实时过滤、静态不收录裸名）；裸名不能保证固定版本，magpie 的组名与 `modelSameAs` 只是统计别名，不是快照锁 |
 | `/chat/completions` 必须带 `traceparent`（W3C 形态）+ `ChatId`/`MsgId`/`TurnId`/`InvokeOrigin`/`X-Loomy-Request-Purpose`/`loomy-version` | 官方客户端 0.9.39 源码注释原文：缺 `traceparent` 时请求会挂死直到超时。本插件在 `chatFetch` 里补全，见下面「聊天请求的协议面」 |
+
+### 团队身份、共享池与成员每日额度
+
+官方客户端 0.9.39 的 `electron/points-service.js` 分别用 `getUserIdentity()` 和
+`queryTeamRecords()` 查询以下只读端点；2026-11-23 用已有登录态复核了响应字段：
+
+| GET 端点 | 权威字段 |
+|---|---|
+| `/api/v1/user/identity` | `currentTeamId`、`teams[].teamId/name`；未选团队才走个人模式，不能用 `isInternal` 判断当前模式 |
+| `/api/v1/team-points/balance` | `teamId`、`currentBalance`、`dailyLimitEnabled`、`dailyLimitPoints`、`dailyConsumedPoints`、`dailyRemainingPoints`、`dailyLimitCycleDate`、`dailyLimitTimezone` |
+
+两者使用与聊天相同的 session。团队选择在服务端账号上下文里，导入登录态后不需要
+另发团队头，也不应在额度查询中调用 `POST /user/current-team` 修改它。
+
+`src/team.mjs` 的规则：
+
+- 卡片 `plan` 显示当前团队名，`balance` 显示团队共享池；不把个人钱包或新手任务加进团队可用额度。
+- 成员每日额度以服务端剩余 / 上限显示，`amount` 是真实已用、`used` 是已用百分比；上限为 0 时不可用，不当作无限。
+- 正的团队共享余额只给 `aside` 文本，没有 `amount` / `limit` / `resetsAt`，不把累计充值当每日额度或编造比例。
+- 团队池为 0 时添加参与路由的 `used:100` 团队窗口；成员每日已用仍保留真实读数。无每日上限时，共享池窗口给出可用 / 耗尽状态。
+- 本地闸同时看共享池和当前成员每日剩余。团队每日上限不写进个人签到的 `dailyQuota` / `dailyCycleDate`。
+- 身份 / 余额请求失败如实报错，不静默回退个人；两次 GET 的团队 ID 不一致时拒绝混用，等待刷新。
+- 缺每日字段、旧业务日或非已验证的 `Asia/Shanghai` 时区时，显示未知，不猜满额 / 用尽；团队池余额缺失也不伪造为 0。
+- 沿用按 session 的 60 秒成功 / 5 秒失败缓存，跨北京时间业务日立即失效；无额外身份长缓存，切换团队后最多一分钟生效。
+- `resetsAt` 只用于每日限额，沿用次日北京 00:05 的显示缓冲；它不是服务端承诺的团队池充值时间。
+
+离线回归：`node --test tests/team-usage.test.mjs`。测试只用虚构团队 / 账号和桩接口，
+不会读取用户凭据、切团队、签到或发模型请求。
 
 ### 聊天请求的协议面（逆向自官方客户端 0.9.39）
 

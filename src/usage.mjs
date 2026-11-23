@@ -4,7 +4,8 @@
 // 一次 usage() 做什么
 // ════════════════════════════════════════════════════════════════════
 //
-//   1. 只读一次 `/api/v1/points/balance`（3 个字段，实测 61~233ms）
+//   1. 读服务端当前团队：团队模式只查 team-points/balance（共享池 + 成员每日额度）。
+//      个人模式仍只读 `/api/v1/points/balance`，沿用下列个人上限推导。
 //   2. 上限（dailyQuota）按优先序取：
 //        a. 凭据里记的（登录/签到时拿到）—— **0 额外请求**
 //        b. 流水推导：dailyBalance + Σ(本业务日 consumeSource=daily 扣分)
@@ -27,6 +28,7 @@
 import { _pure } from "./pure.mjs"
 import { USAGE_CACHE_TTL_MS, USAGE_FAIL_TTL_MS, USAGE_LEAD_POINTS } from "./constants.mjs"
 import { fetchBalances, fetchDailyLedger } from "./api.mjs"
+import { readTeamUsage } from "./team.mjs"
 
 const { beijingCycleDate, balanceLine, windowsOf } = _pure
 
@@ -41,7 +43,8 @@ const cache = new Map() // session -> { at, value }
 export async function readUsage(credential, { now = Date.now(), fetcher = fetch } = {}) {
   const key = credential.session
   const hit = cache.get(key)
-  if (hit && now - hit.at < (hit.value?.error ? USAGE_FAIL_TTL_MS : USAGE_CACHE_TTL_MS)) {
+  const ttl = hit?.value?.error ? USAGE_FAIL_TTL_MS : USAGE_CACHE_TTL_MS
+  if (hit && beijingCycleDate(hit.at) === beijingCycleDate(now) && now - hit.at < ttl) {
     return hit.value
   }
 
@@ -60,6 +63,9 @@ export async function readUsage(credential, { now = Date.now(), fetcher = fetch 
 }
 
 async function compute(credential, now, fetcher) {
+  const team = await readTeamUsage(credential, now, fetcher)
+  if (team) return team
+
   const pools = await fetchBalances(credential.session, fetcher)
   if (!pools) {
     return { error: "积分读数异常（上游没有返回 balance）", windows: [], signIn: "kept" }
@@ -119,7 +125,7 @@ export function quotaToRemember(value, credential, now = Date.now()) {
 /** 去掉内部字段，交给 magpie 的对象必须是纯净的 usage 形状。 */
 export function publicUsage(value) {
   if (!value) return { error: "查询失败", windows: [] }
-  const { _quota, ...rest } = value
+  const { _quota, _team, ...rest } = value
   return rest
 }
 
@@ -132,6 +138,11 @@ export function publicUsage(value) {
  */
 export function exhausted(value) {
   if (!value || value.error) return false
+  if (value._team) {
+    const { balance, remaining } = value._team
+    return (Number.isFinite(balance) && balance <= USAGE_LEAD_POINTS)
+      || (Number.isFinite(remaining) && remaining <= USAGE_LEAD_POINTS)
+  }
   const windows = Array.isArray(value.windows) ? value.windows : []
   if (!windows.length) return false
   const total = Number(String(value.balance ?? "").replace(/[^\d.-]/g, ""))

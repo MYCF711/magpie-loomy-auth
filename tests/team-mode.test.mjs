@@ -147,5 +147,5 @@ test("多账号隔离团队目标", async () => {
 test("旧宿主隐藏设置，不新增登录方式", async () => {
   const p = await LoomyAuthPlugin({})
   assert.deepEqual(p.auth.options, [])
-  assert.equal(p.auth.methods.length, 3)
+  assert.equal(p.auth.methods.length, 2) // 只剩短信 / 粘贴两条纯网络登录
 })

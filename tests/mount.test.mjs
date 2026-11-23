@@ -76,9 +76,12 @@ test("九项钩子齐全", async () => {
   assert.ok(Number.isFinite(plugin.auth.maxConcurrency))
 })
 
-test("三种登录方式都在，且 authorize() 立刻返回 —— 不许在里面等用户", async () => {
+test("两种纯网络登录方式都在（不再读本机客户端），且 authorize() 立刻返回", async () => {
   const plugin = await LoomyAuthPlugin({ client: {} })
-  assert.equal(plugin.auth.methods.length, 3)
+  assert.equal(plugin.auth.methods.length, 2)
+  for (const method of plugin.auth.methods) {
+    assert.doesNotMatch(method.label, /桌面端|本机客户端/, "脱离官方客户端后不许再有读本机登录态的方式")
+  }
 
   for (const method of plugin.auth.methods) {
     const t0 = Date.now()

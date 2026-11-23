@@ -59,6 +59,31 @@ export function chatIdFor(sessionId) {
   return `chat-${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`
 }
 
+/**
+ * `x-session-affinity`：**官方 opencode 运行时自己发的头**，Electron 那条路径没有。
+ *
+ * 取证（2026-11-23，本机抓包）：用客户端自带的 `opencode.exe 1.14.22` + 模板里的
+ * `imodel` provider，把 baseURL 指到本机抓包口，抓到它真实发出的头：
+ *
+ *   user-agent: opencode/1.14.22 ai-sdk/provider-utils/4.0.23 runtime/bun/1.3.13
+ *   authorization: Bearer <session> · token: <session>
+ *   x-session-affinity: ses_<openCode 会话 id>
+ *   accept: *\/*  ·  connection: keep-alive
+ *   （**没有** traceparent / ChatId / MsgId / InvokeOrigin / loomy-version）
+ *
+ * 它用来把同一会话的请求粘到同一个后端实例，直接影响**前缀缓存命中**：
+ * 不带的请求缓存命中率是 0%，每次都要整段 prefill（3.3 万 token 的 prompt 实测首字 19 秒），
+ * 而带上同一 affinity 的会话在 magpie 日志里能看到 88~99% 的缓存命中。
+ *
+ * 官方值是 opencode 自己的 `ses_...`；magpie 没有同名字段，用会话 id 的 sha256 前 24 位
+ * 拼成同形态 `ses_<24hex>`：同一会话稳定，重启后也稳定。
+ */
+export function sessionAffinityFor(sessionId) {
+  const seed = String(sessionId ?? "").trim()
+  if (!seed) return ""
+  return `ses_${crypto.createHash("sha256").update(seed).digest("hex").slice(0, 24)}`
+}
+
 export function newMsgId() {
   return `msg-${crypto.randomUUID()}`
 }
@@ -73,6 +98,7 @@ export function chatTracingHeaders(input = {}) {
   const msgId = String(input.msgId ?? "").trim() || newMsgId()
   const purpose = String(input.purpose ?? "").trim() || "chat.message"
   const invokeOrigin = String(input.invokeOrigin ?? "").trim() || "user"
+  const affinity = sessionAffinityFor(input.sessionId)
   return {
     traceparent: newTraceparent(),
     ChatId: chatIdFor(input.sessionId),
@@ -81,5 +107,7 @@ export function chatTracingHeaders(input = {}) {
     "X-Loomy-Request-Purpose": purpose,
     InvokeOrigin: invokeOrigin,
     "loomy-version": LOOMY_CHAT_VERSION,
+    // 会话亲和（官方 opencode 路径必带）—— 直接决定前缀缓存能否命中
+    ...(affinity ? { "x-session-affinity": affinity } : {}),
   }
 }

@@ -69,10 +69,10 @@ import {
   INTEGRATION_BASE,
 } from "./src/constants.mjs"
 import { claimDailyQuota, loginBySmsCode, fetchBalances, sendSmsCode, fetchOnboarding, claimAllTasks, fetchInviteCodes, bindInviteCode, fetchActivation } from "./src/api.mjs"
-import { readDesktopSession, readAllLoomySessions, readAllLoomyAccounts } from "./src/desktop.mjs"
 import { staticModels, liveModels } from "./src/models.mjs"
 import { readUsage, publicUsage, quotaToRemember, clearUsageCache } from "./src/usage.mjs"
 import { chatFetch } from "./src/chat.mjs"
+import { inviteCandidates, ownerTag, rememberInviteCodes } from "./src/invite-store.mjs"
 import { createTeamModeController } from "./src/team-mode.mjs"
 
 const API_URL = `${INTEGRATION_BASE}/api/v1`
@@ -133,27 +133,11 @@ export const LoomyAuthPlugin = async ({ client, magpie } = {}) => {
    * ⚠ 结果按分钟缓存：登录是低频操作，但三个 provider id 会各扫一遍，
    *   没必要每次都打 N 个只读请求。
    */
-  const inviteCodeCache = new Map() // session -> { at, codes }
-  const INVITE_CACHE_TTL_MS = 60_000
 
   const collectInviteCandidates = async (excludeSession) => {
-    const sessions = readAllLoomySessions(excludeSession)
-    const out = []
-    for (const session of sessions) {
-      const hit = inviteCodeCache.get(session)
-      if (hit && Date.now() - hit.at < INVITE_CACHE_TTL_MS) {
-        out.push(...hit.codes)
-        continue
-      }
-      try {
-        const codes = await fetchInviteCodes(session)
-        inviteCodeCache.set(session, { at: Date.now(), codes })
-        out.push(...codes)
-      } catch {
-        // 这个号查不到就跳过，不影响其它号
-      }
-    }
-    return out
+    // 来源是**插件自己攒的**邀请码库（src/invite-store.mjs），不读官方客户端：
+    // 哪个号登录过，就把它的邀请码记下来，后面的新号从这里挑。
+    return inviteCandidates(excludeSession)
   }
 
   /**
@@ -192,6 +176,12 @@ export const LoomyAuthPlugin = async ({ client, magpie } = {}) => {
     try {
       const mine = await fetchInviteCodes(session)
       selfCode = mine[0]?.code
+      // 顺手把自己的码记进本地库：下一个新号登录时就有候选可挑
+      try {
+        rememberInviteCodes(mine, { owner: ownerTag(session) })
+      } catch {
+        // 记不住不影响本次
+      }
     } catch {
       selfCode = undefined
     }
@@ -262,60 +252,6 @@ export const LoomyAuthPlugin = async ({ client, magpie } = {}) => {
 
       // ═══ ② 登录 ═══════════════════════════════════════════════════
       methods: [
-        {
-          type: "oauth",
-          label: "Loomy 桌面端登录态（自动读取本机客户端）",
-          /**
-           * ⚠ 立刻返回：真正的等待在 callback 里。这里只做一次同步读盘 + 校验。
-           *   （读盘是毫秒级的，但校验要发一次请求 —— 也放在 callback 里做，
-           *     免得 authorize 卡住导致 magpie 拿不到 url 而死锁。）
-           */
-          authorize: async () => {
-            const desktop = readDesktopSession()
-            if (!desktop) {
-              return {
-                type: "failed",
-                error:
-                  "没有读到本机 Loomy 桌面端的登录态：请先打开 Loomy 客户端并登录，或改用手机号 / 粘贴 session 的方式。",
-              }
-            }
-            const session = String(desktop.session).trim()
-            return {
-              url: "",
-              method: "auto",
-              instructions: `将从本机 Loomy 客户端导入登录态（${
-                desktop.maskedPhone || (desktop.phone ? _pure.maskPhone(String(desktop.phone)) : "Loomy")
-              }）。`,
-              callback: async () => {
-                // 一次校验：目录能拉通才算这个 session 是活的
-                try {
-                  await liveModels(session, {})
-                } catch (error) {
-                  return {
-                    type: "failed",
-                    error: `桌面端登录态已失效（${error?.message ?? error}）：请在 Loomy 客户端重新登录后重试。`,
-                  }
-                }
-                const label =
-                  desktop.maskedPhone ||
-                  (desktop.phone ? _pure.maskPhone(String(desktop.phone)) : `Loomy ${session.slice(-6)}`)
-                // 登录后立刻初始化当天额度（官方客户端同款行为）并把上限记进凭据；
-                // 顺便带上已有账号的邀请码（每个账号只能兑换一次，失败不影响登录）
-                const patch = await settleNewAccount(session)
-                return {
-                  type: "success",
-                  access: session,
-                  refresh: "",
-                  expires: Date.now() + SESSION_TTL_MS,
-                  accountId: label,
-                  ...(desktop.userid ? { uid: String(desktop.userid) } : {}),
-                  ...(desktop.phone ? { phone: String(desktop.phone) } : {}),
-                  ...patch,
-                }
-              },
-            }
-          },
-        },
         {
           type: "oauth",
           label: "手机号 + 短信验证码",
@@ -616,7 +552,6 @@ export const _internal = {
   publicUsage,
   quotaToRemember,
   quotaPatch,
-  readDesktopSession,
   claimDailyQuota,
   fetchBalances,
   fetchOnboarding,
@@ -624,7 +559,6 @@ export const _internal = {
   fetchInviteCodes,
   bindInviteCode,
   fetchActivation,
-  readAllLoomyAccounts,
   pickInviteFor: (session) => pickInviteFor(session),
   collectInviteCandidates: (s) => collectInviteCandidates(s),
 }

@@ -1,7 +1,7 @@
 {
   "name": "magpie-plugin-loomy-auth",
-  "version": "0.1.35",
-  "description": "讯飞 Loomy (iFlytek) for magpie: desktop-session import / SMS / session sign-in, live model catalog with reasoning efforts, chat with tools and images, and the two credit pools reported as the host routes them — the daily pool counts, the permanent one is shown aside.",
+  "version": "0.1.36",
+  "description": "讯飞 Loomy (iFlytek) for magpie: network-only sign-in (SMS / pasted session, no official client required), the official chat request reproduced header-for-header (including opencode's x-session-affinity), no injected system prompt, hardened credential handling, and the daily/permanent/team credit pools reported the way the host routes them.",
   "type": "module",
   "main": "./index.mjs",
   "exports": "./index.mjs",

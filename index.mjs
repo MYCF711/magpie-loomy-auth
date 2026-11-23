@@ -73,10 +73,14 @@ import { readDesktopSession, readAllLoomySessions, readAllLoomyAccounts } from "
 import { staticModels, liveModels } from "./src/models.mjs"
 import { readUsage, publicUsage, quotaToRemember, clearUsageCache } from "./src/usage.mjs"
 import { chatFetch } from "./src/chat.mjs"
+import { createTeamModeController } from "./src/team-mode.mjs"
 
 const API_URL = `${INTEGRATION_BASE}/api/v1`
 
-export const LoomyAuthPlugin = async ({ client } = {}) => {
+export const LoomyAuthPlugin = async ({ client, magpie } = {}) => {
+  const teamMode = magpie?.option ? createTeamModeController({
+    readOption: () => magpie.option(PROVIDER, "personal_mode") === true,
+  }) : null
   const log = (message, level = "info") => {
     try {
       client?.app?.log?.({ service: "loomy", level, message })
@@ -251,6 +255,15 @@ export const LoomyAuthPlugin = async ({ client } = {}) => {
       provider: PROVIDER,
       icon: ICON,
       maxConcurrency: 4,
+      options: [{
+        key: "personal_mode",
+        label: "临时使用个人积分",
+        description: "开启切换为个人账户；关闭恢复切换前的团队。额度只显示当前身份，同时影响 Loomy 客户端。多账号时逐个应用。",
+        labels: { en: "Use personal credits temporarily" },
+        descriptions: { en: "On switches to personal credits; off restores the previous team. Balances follow the active identity. Also changes Loomy's server-side identity, for each signed-in account." },
+        default: false,
+        placement: "top",
+      }],
       // Loomy 没有续期接口；这个值只影响 magpie 何时「尝试」续期，
       // 而 refresh 恒返回 undefined，所以不会真的去续。
       refreshLead: 60_000,
@@ -544,6 +557,12 @@ export const LoomyAuthPlugin = async ({ client } = {}) => {
         const fallback = staticModels()
         const credential = _pure.credentialOf(auth)
         if (!credential) return fallback
+
+        // Magpie 拨动 provider 开关只会调用 models；不要在 usage 里切换身份。
+        if (teamMode && await teamMode.sync(credential)) {
+          clearUsageCache()
+          catalog.delete(credential.session)
+        }
 
         const hit = catalog.get(credential.session)
         if (hit && Date.now() - hit.at < CATALOG_TTL_MS) return hit.models

@@ -144,6 +144,22 @@ Loomy **没有续期接口**（会话固定 14 天），所以本插件**不伪�
 离线回归：`node --test tests/team-usage.test.mjs`。测试只用虚构团队 / 账号和桩接口，
 不会读取用户凭据、切团队、签到或发模型请求。
 
+### 在 Magpie 内实际切换身份
+
+`auth.options` 只支持布尔开关，拨动后只重拉 `provider.models`、不重跑工厂或 loader。
+因此 `personal_mode`（「临时使用个人积分」，`placement: "top"`）在 `models` 的缓存命中
+之前实时读取，通过 `src/team-mode.mjs` 执行切换；不新增登录方式，不在 `usage` 中写服务端。
+
+- 默认关闭且没有此前切换状态时不发请求、不改变客户端原身份。
+- 开启时先保存当前团队作为恢复目标，再用 `POST /api/v1/user/current-team` 的 `{}` 切个人。
+- 关闭时用同一端点的 `{teamId}` 恢复开启前团队，原本个人则仍恢复个人；POST 后再 GET identity 验证，未生效就报错。
+- 恢复目标先于 POST 落盘，防止响应中断但服务端已切换时丢掉原团队；成功后清除旧 usage 缓存。
+- 状态只存 `~/.cache/magpie/loomy-team-mode__<账号指纹>.json`：白名单字段是恢复团队 ID、开关状态和是否已应用；没有 token / 会话副本。
+- 指纹优先稳定 uid，否则用登录态哈希；同名账号不串状态，同账号操作串行，普通目录刷新不会重复 POST。
+- 开关是显式切换操作，不持续覆盖用户之后在客户端的选择；额度显示始终查询服务端当前身份。
+
+离线回归：`node --test tests/team-mode.test.mjs`，存储与网络均用桩，不读真实凭据或修改服务端。
+
 ### 聊天请求的协议面（逆向自官方客户端 0.9.39）
 
 取证链条：`Loomy-Setup-0.9.39.exe`（`https://static-res.xfinfr.com/loomy/win/latest.yml`）

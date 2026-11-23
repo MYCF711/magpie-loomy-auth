@@ -175,6 +175,11 @@ export async function fetchTeamBalances(session, fetcher = fetch) {
   return tokenRequest("GET", "/api/v1/team-points/balance", session, undefined, "团队积分查询", fetcher)
 }
 
+/** 只用于用户明确切换身份时；空 teamId 切个人，非空恢复此前团队。 */
+export async function setCurrentTeam(session, teamId, fetcher = fetch) {
+  return tokenRequest("POST", "/api/v1/user/current-team", session, teamId ? { teamId } : {}, "切换积分身份", fetcher)
+}
+
 /**
  * 从流水推今天的 daily 消耗（降级路径，只在凭据里没有当天 quota 时用）。
  *

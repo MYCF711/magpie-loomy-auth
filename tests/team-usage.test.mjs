@@ -180,7 +180,7 @@ test("数字字符串可读，内部用户切到个人模式时仍读个人钱�
   })
   const value = await readUsage(credential(), { now: NOW, fetcher })
   assert.equal(value.balance, "5500 积分")
-  assert.equal(value.plan, undefined)
+  assert.equal(value.plan, "个人")
   assert.equal(value.windows[0].name, "今日积分")
   assert.equal(calls.some((c) => c.path.includes("team-points")), false)
 })
@@ -244,7 +244,7 @@ test("成功缓存有界，过期后跟随服务端切换为个人模式", async
   assert.equal((await readUsage(cred, { now: NOW + 1000, fetcher })).plan, "团队 · 示例团队")
   assert.equal(calls.length, 2)
   const personal = await readUsage(cred, { now: NOW + 60001, fetcher })
-  assert.equal(personal.plan, undefined)
+  assert.equal(personal.plan, "个人")
   assert.equal(personal.balance, "0 积分")
 })
 

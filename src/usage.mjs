@@ -100,6 +100,7 @@ async function compute(credential, now, fetcher) {
       ? { user: credential.accountId || credential.phone }
       : {}),
     balance: balanceLine(pools.total),
+    plan: "个人",
     windows,
     signIn: "kept",
     // 内部字段，交给 index.mjs 决定要不要写回凭据

@@ -5,7 +5,7 @@
     "loomy"
   ],
   "summary": {
-    "en": "Loomy (iFlytek) coding subscription: desktop-session import / SMS / pasted session sign-in, live model catalog with reasoning efforts, chat with tool calling and images, and the two credit pools (daily + permanent) reported as the host routes them.",
-    "zh": "讯飞 Loomy 编程订阅：桌面端登录态导入 / 短信 / 粘贴 session 三种登录，实时模型目录与思考档位，工具调用与图片对话，积分按今日池 / 永久池分开上报。"
+    "en": "Loomy (iFlytek): network-only sign-in (SMS / pasted session) with no official client required, the official chat request reproduced header-for-header, no injected system prompt, hardened credentials, and credit pools (daily / permanent / team) reported as the host routes them.",
+    "zh": "讯飞 Loomy：纯网络登录（短信 / 粘贴 session），不依赖官方客户端；聊天请求逐头复刻官方；不注入系统提示词；凭据脱敏与上游白名单加固；今日池 / 永久池 / 团队池按宿主路由语义上报。"
   }
 }

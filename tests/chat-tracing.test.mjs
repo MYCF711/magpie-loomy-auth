@@ -178,3 +178,16 @@ test("图片兜底重发复用同一条消息的 ChatId / MsgId", async (t) => {
   assert.equal(calls[1].headers.get("MsgId"), calls[0].headers.get("MsgId"), "同一条消息必须同一个 MsgId")
   assert.equal(isTraceparent(calls[1].headers.get("traceparent")), true)
 })
+
+test("带上官方 opencode 的会话亲和头，且同一会话稳定", async () => {
+  const { chatTracingHeaders, sessionAffinityFor } = await import("../src/tracing.mjs")
+  const a = chatTracingHeaders({ sessionId: "ses-alpha" })
+  const b = chatTracingHeaders({ sessionId: "ses-alpha" })
+  const c = chatTracingHeaders({ sessionId: "ses-beta" })
+  assert.match(a["x-session-affinity"], /^ses_[0-9a-f]{24}$/, "形态要与官方一致：ses_<24hex>")
+  assert.equal(a["x-session-affinity"], b["x-session-affinity"], "同一会话必须稳定，否则缓存亲和失效")
+  assert.notEqual(a["x-session-affinity"], c["x-session-affinity"])
+  assert.equal(a["x-session-affinity"], sessionAffinityFor("ses-alpha"))
+  assert.equal(sessionAffinityFor(""), "", "没有会话 id 就不发这个头")
+  assert.equal("x-session-affinity" in chatTracingHeaders({}), false)
+})

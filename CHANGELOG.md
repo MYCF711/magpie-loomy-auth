@@ -3,6 +3,17 @@
 > 每个版本一节，**一条一行**，说用户能感知的变化。
 > 格式与发布流程见 [magpie-plugin-scaffold](https://github.com/MYCF711/magpie-plugin-scaffold) 的 [UPDATING.md](https://github.com/MYCF711/magpie-plugin-scaffold/blob/main/UPDATING.md)。
 
+## 0.1.36 — 2026-11-23
+
+**并入「脱离客户端」这条线的能力：安全加固 + 提示词剥离 + 会话亲和**
+
+- 登录只剩两条**纯网络**路径（短信 / 粘贴 session）：删除 `src/desktop.mjs`，不再读本机其它应用的文件，也不再扫本机登录态做邀请候选。
+- 新增 `src/hardening.mjs`：凭据脱敏（session / Bearer / JWT / 手机号）、上游主机白名单（`loomyad.xunfei.cn` / `account.xfinfr.com`，仅 https 且拒绝重定向）。
+- 新增 `src/prompt.mjs`：本插件不注入任何 system；若请求里出现官方那整段灵魂提示词，发送前剥掉（快路径只多一次子串查找）。
+- 新增 `src/invite-store.mjs`：自动邀请改用插件自己的码库（只存邀请码 + 状态 + 归属指纹，不存 session），并内置兜底码；`LOOMY_INVITE_CODE` 可覆盖。
+- 追踪头补上官方 opencode 路径必带的 `x-session-affinity`（会话稳定，影响后端粘滞与前缀缓存）。
+- `docs/internals.md` 增补：Loomy 客户端内核是 opencode 1.14.22（抓包取证）、两条聊天路径的头差异、以及「慢在首字排队、不在吐字」的实测口径更正。
+
 ## 0.1.35 — 2026-11-23
 
 - 首次读取到团队身份时只记录、不再下发切换：此前宿主还没声明这个开关时读到的「关」会被当成用户意图，把本来在团队里的账号静默切到个人。

@@ -21,6 +21,7 @@
 
 import { _pure } from "./pure.mjs"
 import { CHAT_TIMEOUT_MS, CLIENT_UA, ERROR_CODES } from "./constants.mjs"
+import { stripOfficialSoulPrompt } from "./prompt.mjs"
 import { chatTracingHeaders } from "./tracing.mjs"
 import { exhausted } from "./usage.mjs"
 
@@ -58,6 +59,13 @@ export async function chatFetch({ input, init, credential, session, usageValue }
     model = JSON.parse(bodyText)?.model ?? ""
   } catch {
     // 非 JSON body：原样透传
+  }
+
+  // ①.5 剥掉官方 soul prompt（若有人把客户端那整段抄进了请求）。
+  //     ⚠ 快路径：没命中特征串就直接返回，热路径只多一次子串查找。
+  if (bodyText) {
+    const stripped = stripOfficialSoulPrompt(bodyText)
+    if (stripped) bodyText = stripped.body
   }
 
   // ② 发送前预改写：已知不吃 `image_url` 的模型直接按标记形态发（省掉一次 400）

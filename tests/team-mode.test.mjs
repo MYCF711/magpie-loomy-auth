@@ -38,6 +38,31 @@ test("首次跟随服务端；两端是个人 / 团队并即时应用", async ()
   assert.doesNotMatch(JSON.stringify(o), /临时|开启|关闭|temporar/i)
   assert.equal(s.calls.filter(c => c.method === "POST").length, 0)
 })
+test("首次 sync 绝不下发切换：宿主此时还没声明开关，读到的「关」不是用户意图", async () => {
+  // 真实宿主的顺序是「先声明开关、再重拉模型」，而 options() 在首次 sync 前是空的 ——
+  // 此刻读 team_mode 只会拿到「未声明 ⇒ 缺省 false」。若把它当用户意图，
+  // 已经在团队里的账号会被静默切到个人（GET identity → POST current-team {} → GET identity）。
+  let current = "team-example"
+  const calls = []
+  const controller = createTeamModeController({ readOption: () => false })
+  const fetcher = async (url, init) => {
+    const path = new URL(url).pathname
+    calls.push({ path, method: init.method, body: init.body })
+    if (path.endsWith("/identity")) {
+      return json({ currentTeamId: current, teams: [{ teamId: "team-example", status: "active" }] })
+    }
+    if (path.endsWith("/current-team")) {
+      current = JSON.parse(init.body).teamId ?? ""
+      return json({})
+    }
+    throw new Error(`unexpected path ${path}`)
+  }
+  assert.equal(await controller.sync(credential(), fetcher), false)
+  assert.equal(calls.filter(c => c.method === "POST").length, 0, "首次同步不许改服务端身份")
+  assert.equal(current, "team-example", "团队身份必须原样保留")
+  assert.equal(controller.options()[0].default, true, "首次同步后开关默认值应等于服务端身份")
+})
+
 test("团队切个人再切团队，直接调用官方接口并查身份确认", async () => {
   const s = setup()
   await s.controller.sync(credential(), s.fetcher)
@@ -87,6 +112,7 @@ test("多个团队优先当前团队；切个人再切团队仍选同一个", as
 })
 test("服务端未切成功报错；响应断开后可重试", async () => {
   const s = setup()
+  await s.controller.sync(credential(), s.fetcher) // 基线：首次 sync 只记录，不下发
   s.selected = false
   s.ignorePost = true
   await assert.rejects(s.controller.sync(credential(), s.fetcher), /未生效/)
@@ -110,11 +136,12 @@ test("同账号并发刷新不重复切换；客户端自行切换会使额度�
 test("多账号隔离团队目标", async () => {
   const s = setup()
   s.selected = false
-  await s.controller.sync(credential("one"), s.fetcher)
+  await s.controller.sync(credential("one"), s.fetcher) // 账号一基线（只记录）
   s.current = ""
   s.teams = [{ teamId: "other", status: "active" }]
+  await s.controller.sync(credential("two"), s.fetcher) // 账号二基线：记住自己的目标 other
   s.selected = true
-  await s.controller.sync(credential("two"), s.fetcher)
+  await s.controller.sync(credential("two"), s.fetcher) // 只有账号二被拨到团队
   assert.equal(s.current, "other")
 })
 test("旧宿主隐藏设置，不新增登录方式", async () => {

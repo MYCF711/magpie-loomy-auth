@@ -3,6 +3,10 @@
 > 每个版本一节，**一条一行**，说用户能感知的变化。
 > 格式与发布流程见 [magpie-plugin-scaffold](https://github.com/MYCF711/magpie-plugin-scaffold) 的 [UPDATING.md](https://github.com/MYCF711/magpie-plugin-scaffold/blob/main/UPDATING.md)。
 
+## 0.1.35 — 2026-11-23
+
+- 首次读取到团队身份时只记录、不再下发切换：此前宿主还没声明这个开关时读到的「关」会被当成用户意图，把本来在团队里的账号静默切到个人。
+
 ## 0.1.34 — 2026-11-23
 
 - 切回个人时明确更新账号身份徽标，避免保留此前的团队名称。

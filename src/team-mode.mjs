@@ -27,16 +27,33 @@ export function createTeamModeController({ readOption }) {
     const target = teams.find(t => t.teamId === current)?.teamId
       ?? teams.find(t => t.teamId === previous?.target)?.teamId
       ?? teams[0]?.teamId
-    accounts.set(key, { teams, current, target })
     let changed = !!previous && previous.current !== current
-    if (!teams.length) return changed
-    // 先读成员和当前身份再取宿主值：未设置时 default 就是服务端的身份。
-    const desired = readOption() === true ? target : ""
-    if (current === desired) return changed
+    if (!teams.length) {
+      accounts.set(key, { teams, current, target, optionOn: !!current })
+      return changed
+    }
+    // ⚠ 第一次观察只记录、绝不下发切换。
+    // 宿主是「先声明开关、再重拉模型」的顺序，而 `options()` 在第一次 sync 之前是空的：
+    // 此刻向宿主读这个键，拿到的只会是「未声明 ⇒ 缺省 false」。
+    // 拿它当用户意图，就会把本来在团队里的账号静默切到个人（实测调用序：
+    // GET identity → POST current-team {} → GET identity）。
+    // 首次只把「开关 = 服务端当前身份」记下来，和 `options()` 里 default 的定义保持一致；
+    // 之后只有在宿主读数与上次记录不同（= 用户真的拨了开关）时才写服务端。
+    const optionOn = previous ? readOption() === true : !!current
+    if (!previous || previous.optionOn === optionOn) {
+      accounts.set(key, { teams, current, target, optionOn })
+      return changed
+    }
+    const desired = optionOn ? target : ""
+    if (current === desired) {
+      accounts.set(key, { teams, current, target, optionOn })
+      return changed
+    }
     await setCurrentTeam(credential.session, desired, fetcher)
     const verified = await fetchTeamContext(credential.session, fetcher)
+    // 失败时不落 optionOn：宿主读数仍是新值，下一次 sync 会重试。
     if (currentId(verified) !== desired) throw new Error("积分账户切换未生效，请重试")
-    accounts.set(key, { teams: joined(verified), current: desired, target })
+    accounts.set(key, { teams: joined(verified), current: desired, target, optionOn })
     return true
   }
   return {

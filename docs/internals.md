@@ -147,16 +147,16 @@ Loomy **没有续期接口**（会话固定 14 天），所以本插件**不伪�
 ### 在 Magpie 内实际切换身份
 
 `auth.options` 只支持布尔开关，拨动后只重拉 `provider.models`、不重跑工厂或 loader。
-因此 `personal_mode`（「临时使用个人积分」，`placement: "top"`）在 `models` 的缓存命中
+因此 `team_mode`（「积分账户」，`placement: "top"`）在 `models` 的缓存命中
 之前实时读取，通过 `src/team-mode.mjs` 执行切换；不新增登录方式，不在 `usage` 中写服务端。
 
-- 默认关闭且没有此前切换状态时不发请求、不改变客户端原身份。
-- 开启时先保存当前团队作为恢复目标，再用 `POST /api/v1/user/current-team` 的 `{}` 切个人。
-- 关闭时用同一端点的 `{teamId}` 恢复开启前团队，原本个人则仍恢复个人；POST 后再 GET identity 验证，未生效就报错。
-- 恢复目标先于 POST 落盘，防止响应中断但服务端已切换时丢掉原团队；成功后清除旧 usage 缓存。
-- 状态只存 `~/.cache/magpie/loomy-team-mode__<账号指纹>.json`：白名单字段是恢复团队 ID、开关状态和是否已应用；没有 token / 会话副本。
-- 指纹优先稳定 uid，否则用登录态哈希；同名账号不串状态，同账号操作串行，普通目录刷新不会重复 POST。
-- 开关是显式切换操作，不持续覆盖用户之后在客户端的选择；额度显示始终查询服务端当前身份。
+- `auth.options` 为动态 getter：仅 identity 的 `teams` 中存在 active 成员资格时返回设置。当前为个人不等于未加入团队。
+- 布尔值 false / true 对应个人 / 团队，以 `offLabel` / `onLabel` 及其语言映射显示；`immediate: true` 让支持的 Magpie 点选即保存并刷新模型和额度。
+- 首次发现成员与当前身份后再读宿主选项；尚未设置时默认跟随服务端，不擅自改变身份。
+- 个人用 `POST /api/v1/user/current-team {}`，团队用 `{teamId}`；团队目标只能来自该账号 active 成员列表，优先当前或本进程上次选择的团队。
+- POST 后再 GET identity 验证，未生效就报错。成功或错误都清旧 usage 缓存，避免服务端已切换但 POST 响应丢失时继续显示旧额度。
+- 仅有按 uid / 登录态哈希隔离的内存状态，不再写恢复文件；同账号操作串行，已有相同身份时不重复 POST。
+- 宿主的选项是供应商级，多个成员账号分别选择自己的团队；没有团队的账号始终保持个人，不向未知团队发切换请求。额度始终只读服务端当前身份。
 
 离线回归：`node --test tests/team-mode.test.mjs`，存储与网络均用桩，不读真实凭据或修改服务端。
 

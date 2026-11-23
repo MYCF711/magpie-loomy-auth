@@ -71,7 +71,7 @@ curl -s "https://usemagpie.ai/api/latest?channel=stable" | grep -o '"version":"[
 | 20 | **「Loomy 转云端 agent 后插件全废了」**：请求随机 503 / 150 秒后 504 / 首字几十秒，看起来像插件坏了 | 先看 503 的 body：`{"error":{"type":"no_provider_error","metadata":{"provider_name":"venus"}}}` 或 `openresty` 的 `504 Gateway Time-out` ⇒ **上游可调度实例为 0 或网关超时**，不是鉴权（鉴权失败是 `100002`/401）。判据：同时段换模型对照即可（2026-11-20 实测 1017 有时 1.6s 有时 150s，`auto` 会落到当时可用的那个）。⚠ 该次「更新」**没有新客户端**（`latest.yml` 仍 0.9.39）也**没有新端点**（`/api/v1/agent/*` 全 404）；工具调用仍可用（`finish_reason: tool_calls`），基础模型也没有 Loomy 人设（它自称讯飞星火） | `docs/internals.md`「2026-11-20 上游变化」 |
 
 | 21 | 团队账号卡片显示个人余额，个人钱包空时误挡企业请求 | 先读服务端 `currentTeamId`，共享池与成员每日限额独立显示；任一耗尽参与路由，团队上限不覆盖个人签到凭据。判据：`node --test tests/team-usage.test.mjs` | internals「团队身份、共享池与成员每日额度」 |
-| 22 | 身份开关拨了没效果，或者打开用量页就修改了团队 | `personal_mode` 在 `models` 缓存命中前实时读；切换只走该入口，先存恢复目标再 POST，成功后校验并清 usage 缓存，usage 始终只读。判据：`node --test tests/team-mode.test.mjs` | internals「在 Magpie 内实际切换身份」 |
+| 22 | 个人 / 团队选择不生效，或个人模式下成员选项消失 | `team_mode` 在 `models` 缓存命中前读；按 active 成员资格显示设置，false / true 显示个人 / 团队；POST 后校验并清 usage 缓存，usage 始终只读。判据：`node --test tests/team-mode.test.mjs` | internals「在 Magpie 内实际切换身份」 |
 
 ---
 
